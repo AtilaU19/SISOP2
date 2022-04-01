@@ -9,9 +9,15 @@
 #include <string.h>
 
 #define PORT 4000
+#define BUFFER_SIZE 256
+#define QUIT 1
+#define SEND 2
+#define FOLLOW 3
 
 int main(int argc, char *argv[])
 {
+	pthread_t thr_client_input, thr_client_display;
+	
     int sockfd, n;
 	unsigned int length;
 	struct sockaddr_in serv_addr, from;
@@ -55,4 +61,51 @@ int main(int argc, char *argv[])
 	
 	close(sockfd);
 	return 0;
+}
+
+//function to send messages from client
+//should be called in a separate thread 
+//as to not conflict with receiving messages
+void *sendmessage(void *arg){
+	int n, flag, action, sockfd = *(int *) arg; 
+	char buffer[BUFFER_SIZE];
+
+	while(1)
+	{
+		//clears buffer
+		bzero(buffer, BUFFER_SIZE);
+		if(!fgets(buffer, BUFFER_SIZE, stdin))
+			action = QUIT;
+		else
+			action = getaction(buffer);
+		switch(action){
+			case QUIT:
+			//isso aqui vai ser o handle de sair da sessão
+				quitsignal();
+				break;
+			case SEND:
+				if (strlen(buffer) <= 280)
+					sendpacket();
+		}
+	}
+}
+
+
+int getaction(char* buffer){
+	if(!strncmp(buffer, "SEND ", 5))
+		return SEND;
+
+	if(!strncmp(buffer, "FOLLOW ", 7))
+		return FOLLOW;
+//if action is not follow or send then return error (-1)
+	else
+		return -1;
+}
+//TEM QUE IMPLEMENTAR AINDA
+void quitsignal(){
+	return;
+}
+//TEM QUE IMPLEMENTAR AINDA
+void sendpacket(){
+	return;
 }
