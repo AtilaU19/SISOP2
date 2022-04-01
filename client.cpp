@@ -7,18 +7,24 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
+#include "packet.cpp"
 
 #define PORT 4000
 #define BUFFER_SIZE 256
 #define QUIT 1
 #define SEND 2
 #define FOLLOW 3
+#define TRUE 1
+
+int sockfd;
+int seqncnt = 0;
 
 int main(int argc, char *argv[])
 {
 	pthread_t thr_client_input, thr_client_display;
 	
-    int sockfd, n;
+    int n;
 	unsigned int length;
 	struct sockaddr_in serv_addr, from;
 	struct hostent *server;
@@ -81,11 +87,21 @@ void *sendmessage(void *arg){
 		switch(action){
 			case QUIT:
 			//isso aqui vai ser o handle de sair da sessão
-				quitsignal();
+				closeSession;
 				break;
 			case SEND:
-				if (strlen(buffer) <= 280)
-					sendpacket();
+				if (strlen(buffer) > 134){
+					printf("Message exceeds character limit (128)\n");
+				}
+				else{
+					sendpacket(sockfd, SEND, ++seqncnt, strlen(buffer)-5, getcurrenttime(), buffer+5*sizeof(char));
+				}
+				break;
+			case FOLLOW:
+				sendpacket(sockfd, FOLLOW, ++seqncnt,  strlen(buffer)-7, getcurrenttime(), buffer+7*sizeof(char));
+				break;
+			default:
+				printf("Action unknown. Should be:\nSEND <message>\nFOLLOW <@user>\nQUIT");	
 		}
 	}
 }
@@ -97,15 +113,25 @@ int getaction(char* buffer){
 
 	if(!strncmp(buffer, "FOLLOW ", 7))
 		return FOLLOW;
-//if action is not follow or send then return error (-1)
+//se não for follow ou send retorna erro (-1)
 	else
 		return -1;
 }
-//TEM QUE IMPLEMENTAR AINDA
-void quitsignal(){
-	return;
+//fecha a session quando der ctrl c no terminal
+void closeSession(){
+	sendpacket(sockfd,QUIT,++seqncnt,0,0,"");
+    recvprintpacket(sockfd);
+    close(sockfd);
+    system("clear"); 
+    printf("Session closed\n");
+    exit(1);
 }
-//TEM QUE IMPLEMENTAR AINDA
-void sendpacket(){
-	return;
+//pega o tempo no momento da chamada
+int getcurrenttime(){
+	time_t currenttime = time(NULL);
+	struct tm *structtm = localtime(&currenttime);
+	int hr = (*structtm).tm_hour;
+	int min = (*structtm).tm_min;
+
+	return hr*100+min;
 }
