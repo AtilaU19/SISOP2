@@ -23,6 +23,7 @@
 
 int sockfd;
 int seqncnt = 0;
+struct sockaddr_in serv_addr;
 
 int main(int argc, char *argv[])
 {
@@ -31,7 +32,6 @@ int main(int argc, char *argv[])
     int n, port;
 	unsigned int length;
 	char handle[20];
-	struct sockaddr_in serv_addr, from;
 	struct hostent *server;
 	
 	char buffer[256];
@@ -56,14 +56,11 @@ int main(int argc, char *argv[])
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
 	
+	memset(&serv_addr, '\0', sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;     
 	serv_addr.sin_port = htons(port);    
 	serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
-	bzero(&(serv_addr.sin_zero), 8);  
-
-	if((connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr))<0)){
-		printf("Socket connection error\n");
-	}
+//	bzero(&(serv_addr.sin_zero), 8);  
 
 	sendhandletoserver(handle);
 
@@ -103,11 +100,11 @@ void *sendmessage(void *arg){
 					printf("Message exceeds character limit (128)\n");
 				}
 				else{
-					sendpacket(sockfd, SEND, ++seqncnt, strlen(buffer)-5, getcurrenttime(), buffer+5*sizeof(char));
+					sendpacket(sockfd, SEND, ++seqncnt, strlen(buffer)-5, getcurrenttime(), buffer+5*sizeof(char), serv_addr);
 				}
 				break;
 			case FOLLOW:
-				sendpacket(sockfd, FOLLOW, ++seqncnt,  strlen(buffer)-7, getcurrenttime(), buffer+7*sizeof(char));
+				sendpacket(sockfd, FOLLOW, ++seqncnt,  strlen(buffer)-7, getcurrenttime(), buffer+7*sizeof(char), serv_addr);
 				break;
 			default:
 				printf("Action unknown. Should be:\nSEND <message>\nFOLLOW <@user>\nQUIT");	
@@ -153,7 +150,7 @@ int getaction(char* buffer){
 }
 //fecha a session quando der ctrl c no terminal
 void closeSession(){
-	sendpacket(sockfd,QUIT,++seqncnt,0,0,"");
+	sendpacket(sockfd,QUIT,++seqncnt,0,0,"", serv_addr);
     recvprintpacket(sockfd);
     close(sockfd);
     system("clear"); 
@@ -183,5 +180,5 @@ void validateuserhandle(char *handle){
 }
 
 void sendhandletoserver(char *handle){
-	sendpacket(sockfd, LOGUSER, ++seqncnt, strlen(handle)+1, getcurrenttime(), handle);
+	sendpacket(sockfd, LOGUSER, ++seqncnt, strlen(handle)+1, getcurrenttime(), handle, serv_addr);
 }
