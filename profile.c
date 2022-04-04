@@ -54,73 +54,72 @@ typedef struct profile{
  } profile;
 
 /////pode abrir cabeçalhos do profile.c//////
-int profile_handler(profile *list_of_profiles, char *username, int newsockfd, int sqncnt){//add profile if it doesn't exist, else add to online
+int profile_handler(profile *list_of_profiles, char *username, int sockfd, int sqncnt){//add profile if it doesn't exist, else add to online
 	
-	int profile_id = get_profile_id(profile_list,username);
+	int profile_id = get_profile_id(list_of_profiles,username);
 
 	if(profile_id == -1){ //CASO NÃO EXISTA 
 
 		//INSERE
-		profile_id = insert_profile(profile_list, username);
+		profile_id = insert_profile(list_of_profiles, username);			//insere novo profile na lista
 
-		if(profile_id == -1){
+		if(profile_id == -1){											//veririca se vaor max. não foi excedido
 			printf("MAX NUMBER OF PROFILES REACHED\n");
 			exit(1);
 		}
 	} 
-	else{//CASO USUARIO JÁ EXISTA
-		if(profile_list[profile_id].online > 1){ //MAXIMO NUMERO DE ACESSOS É 2
+	else{
+		if(list_of_profiles[profile_id].online > 1){ 					//se o usuário já existe, verifica-se se não excedeu o número máximo de 2 sessões online por usuário
 			
 			printf("Um usuario tentou exceder o numero de acessos.\n");
-			send_packet(newsockfd,CMD_QUIT,sqncnt,4,0,"quit");
-			close(newsockfd);
+			send_packet(sockfd,CMD_QUIT,sqncnt,4,0,"quit");			//caso excedido, sistema da quit e fecha socket
+			close(sockfd);
 			return -1;
 		}
 		else{
-			//AUMENTA A QUANTIDADE DE USUARIOS ONLINE
-			profile_list[profile_id].online +=1;
+			list_of_profiles[profile_id].online +=1;				//aumenta em 1 a quantia de usuários online
 		}
 	}
 
-	
 	return profile_id;
 }
-void profiles_initializer(profile *list_of_profiles){//Loads all the starting profiles
+
+void profiles_initializer(profile *list_of_profiles){		//inicializa todas profiles da lista com nome vazio e 0 em online			
 		for(int i =0; i<MAX_CLIENTS; i++){
-			profile_list[i].name= "";
-			profile_list[i].online= 0;
+			list_of_profiles[i].name= "";
+			list_of_profiles[i].online= 0;
 	}
 } 
 
-void print_profiles(profile* profile_list){
+void print_profiles(profile* list_of_profiles){				//printa todas profiles da lista
 
 	for(int i =0; i<MAX_CLIENTS; i++){
-		if(profile_list[i].name != ""){
-			printf("Profile: %s Online %d\n", profile_list[i].name, profile_list[i].online);
+		if(list_of_profiles[i].name != ""){
+			printf("Profile: %s Online %d\n", list_of_profiles[i].name, list_of_profiles[i].online);
 		}
 	}
 }
 
-int insert_profile(profile *list_of_profiles, char* username){//Inserts a new profile
-		for(int i =0; i<MAX_CLIENTS; i++){
-        if(profile_list[i].name == ""){
+int insert_profile(profile *list_of_profiles, char* username){		//cria uma nova profile
+		
+		for(int i =0; i<MAX_CLIENTS; i++){								//seta seus valores iniciais
+        if(list_of_profiles[i].name == ""){
         	
-        	profile_list[i].name = (char*)malloc(strlen(username)+1);
-            strcpy(profile_list[i].name,username);
-            profile_list[i].online = 1;
-            profile_list[i].num_followers = 0;
-            profile_list[i].num_snd_notifs = 0;
-            profile_list[i].num_pnd_notifs = 0;
+        	list_of_profiles[i].name = (char*)malloc(strlen(username)+1);
+            strcpy(list_of_profiles[i].name,username);
+            list_of_profiles[i].online = 1;
+            list_of_profiles[i].num_followers = 0;
+            list_of_profiles[i].num_snd_notifs = 0;
+            list_of_profiles[i].num_pnd_notifs = 0;
 
             //Initializing pending and send notifications
             for(int j=0;j<MAX_NOTIFS; j++){
 
-            	profile_list[i].pnd_notifs[j].notif_id = -1;
-            	profile_list[i].pnd_notifs[j].profile_id = -1;
-            	profile_list[i].snd_notifs[j]= NULL;
+            	list_of_profiles[i].pnd_notifs[j].notif_id = -1;
+            	list_of_profiles[i].pnd_notifs[j].profile_id = -1;
+            	list_of_profiles[i].snd_notifs[j]= NULL;
             }
-
-
+			
             return i;
         }
     }
@@ -129,9 +128,9 @@ int insert_profile(profile *list_of_profiles, char* username){//Inserts a new pr
 } 
 int get_profile_id(profile *list_of_profiles, char *username){//Gets a profile bid by name
 		for(int i =0; i<MAX_CLIENTS; i++){
-		if(profile_list[i].name != ""){
+		if(list_of_profiles[i].name != ""){
 			
-			if(strcmp(profile_list[i].name,username)== 0){
+			if(strcmp(list_of_profiles[i].name,username)== 0){
 				return i;
 			}
 		}
@@ -149,7 +148,7 @@ void print_profile_pointers(profile** profile_pointers){ //
 	}
 }
 
-void print_pnd_notifs(profile p){ //pinta notificações pendentes do usuário
+void print_pnd_notifs(profile p){ //printa notificações pendentes do usuário
 		profile p;
 	for(int i =0; i<MAX_FOLLOW; i++){
 		p = (*profile_pointers)[i];
