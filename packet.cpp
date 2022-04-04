@@ -11,6 +11,15 @@
  } packet;
 
 
+//pega o tempo no momento da chamada
+int getcurrenttime(){
+	time_t currenttime = time(NULL);
+	struct tm *structtm = localtime(&currenttime);
+	int hr = (*structtm).tm_hour;
+	int min = (*structtm).tm_min;
+
+	return hr*100+min;
+}
 //TEM QUE IMPLEMENTAR AINDA
 void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* payload, struct sockaddr_in serv_addr){
     
@@ -21,22 +30,10 @@ void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* 
 	msg.timestamp = timestamp;
 
 	sendto(sockfd, &msg, sizeof(msg), 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
-    printf("[+] Data sent: %¨s\n",msg._payload);
-}
-//pega o packet recebido do recvpacket e printa caso tenha algum conteúdo
-void recvprintpacket(int sockfd){
-    packet msg;
-
-    recvpacket(sockfd,&msg);
-
-    if(msg._payload!=NULL && msg.length!=0){
-        //POSSO ESTAR USANDO SPRINTF ERRADO
-        sprintf("%s\n", msg._payload);
-        free(msg._payload);
-    }
+    printf("[+] Data sent: %s\n",msg._payload);
 }
 // só recebe o packet, chamado pelo recvprintpacket
-void recvpacket(int sockfd, packet* msg){
+void recvpacket(int sockfd, packet* msg, struct sockaddr_in serv_addr){
     socklen_t addr_size = sizeof(serv_addr);
     //espera terminar de ler do socket
     while(read(sockfd,msg,8)<0);
@@ -54,3 +51,16 @@ void recvpacket(int sockfd, packet* msg){
         (*msg)._payload = NULL;
     }
 }
+//pega o packet recebido do recvpacket e printa caso tenha algum conteúdo
+void recvprintpacket(int sockfd, struct sockaddr_in serv_addr){
+    packet msg;
+
+    recvpacket(sockfd,&msg, serv_addr);
+
+    if(msg._payload!=NULL && msg.length!=0){
+        //POSSO ESTAR USANDO SPRINTF ERRADO
+        printf("%s\n", msg._payload);
+        free(msg._payload);
+    }
+}
+

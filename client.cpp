@@ -9,72 +9,33 @@
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
+#include "commons.h"
 #include "packet.cpp"
-
-#define PORT 4000
-#define BUFFER_SIZE 256
-#define QUIT 1
-#define SEND 2
-#define FOLLOW 3
-#define NOTIFICATION 4
-#define SERVERMSG 5
-#define LOGUSER 6
-#define TRUE 1
 
 int sockfd;
 int seqncnt = 0;
 struct sockaddr_in serv_addr;
 
-int main(int argc, char *argv[])
-{
-	pthread_t thr_client_input, thr_client_display;
-	
-    int n, port;
-	unsigned int length;
-	char handle[20];
-	struct hostent *server;
-	
-	char buffer[256];
-	if (argc < 4) {
-		fprintf(stderr, "usage ./app_cliente <@profile> <server_address> <port> \n");
-		exit(0);
+int getaction(char* buffer){
+	if(!strncmp(buffer, "SEND ", 5))
+		return SEND;
 
-	}
-	
-	server = gethostbyname(argv[2]);
-	if (server == NULL) {
-        fprintf(stderr,"ERROR, no such host\n");
-        exit(0);
-    }
-
-	port = atoi(argv[3]);
-
-	strcpy(handle, argv[1]);	
-	validateuserhandle(handle);
-	printf("User handle: %s , Port: %d\nUse SEND to send a message to all followers.\nUse FOLLOW <@handle> to follow another user.",handle, port);
-
-	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		printf("ERROR opening socket");
-	
-	memset(&serv_addr, '\0', sizeof(serv_addr));
-	serv_addr.sin_family = AF_INET;     
-	serv_addr.sin_port = htons(port);    
-	serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
-//	bzero(&(serv_addr.sin_zero), 8);  
-
-	sendhandletoserver(handle);
-
-
-//Começa uma thread para receber mensagens e outra para enviar
-	pthread_create(&thr_client_display, NULL, receivemessage, &sockfd);
-	pthread_create(&thr_client_input, NULL, sendmessage, &sockfd);
-	
-	pthread_join(thr_client_display, NULL);
-	pthread_join(thr_client_input, NULL);
-	close(sockfd);
-	return 0;
+	if(!strncmp(buffer, "FOLLOW ", 7))
+		return FOLLOW;
+//se não for follow ou send retorna erro (-1)
+	else
+		return -1;
 }
 
+//fecha a session quando der ctrl c no terminal
+void closeSession(){
+	sendpacket(sockfd,QUIT,++seqncnt,0,0,"", serv_addr);
+    recvprintpacket(sockfd, serv_addr);
+    close(sockfd);
+    system("clear"); 
+    printf("Session closed\n");
+    exit(1);
+}
 //function to send messages from client
 //should be called in a separate thread 
 //as to not conflict with receiving messages
@@ -117,7 +78,7 @@ void *receivemessage(void *arg){
 	packet msg;
 
 	while(TRUE){
-		recvpacket(sockfd, &msg);
+		recvpacket(sockfd, &msg, serv_addr);
 		switch(msg.type){
 			case FOLLOW:
 				printf("%s\n", msg._payload);
@@ -138,34 +99,7 @@ void *receivemessage(void *arg){
 	}
 }
 
-int getaction(char* buffer){
-	if(!strncmp(buffer, "SEND ", 5))
-		return SEND;
 
-	if(!strncmp(buffer, "FOLLOW ", 7))
-		return FOLLOW;
-//se não for follow ou send retorna erro (-1)
-	else
-		return -1;
-}
-//fecha a session quando der ctrl c no terminal
-void closeSession(){
-	sendpacket(sockfd,QUIT,++seqncnt,0,0,"", serv_addr);
-    recvprintpacket(sockfd);
-    close(sockfd);
-    system("clear"); 
-    printf("Session closed\n");
-    exit(1);
-}
-//pega o tempo no momento da chamada
-int getcurrenttime(){
-	time_t currenttime = time(NULL);
-	struct tm *structtm = localtime(&currenttime);
-	int hr = (*structtm).tm_hour;
-	int min = (*structtm).tm_min;
-
-	return hr*100+min;
-}
 
 void validateuserhandle(char *handle){
 	//Testa o comprimento do username
@@ -179,6 +113,56 @@ void validateuserhandle(char *handle){
 	}
 }
 
+
+
 void sendhandletoserver(char *handle){
 	sendpacket(sockfd, LOGUSER, ++seqncnt, strlen(handle)+1, getcurrenttime(), handle, serv_addr);
+}
+int main(int argc, char *argv[])
+{
+	pthread_t thr_client_input, thr_client_display;
+	
+    int n, port;
+	unsigned int length;
+	char handle[20];
+	struct hostent *server;
+
+	if (argc < 4) {
+		fprintf(stderr, "usage ./app_cliente <@profile> <server_address> <port> \n");
+		exit(0);
+
+	}
+	
+	server = gethostbyname(argv[2]);
+	if (server == NULL) {
+        fprintf(stderr,"ERROR, no such host\n");
+        exit(0);
+    }
+
+	port = atoi(argv[3]);
+
+	strcpy(handle, argv[1]);	
+	validateuserhandle(handle);
+	printf("User handle: %s , Port: %d\nUse SEND to send a message to all followers.\nUse FOLLOW <@handle> to follow another user.",handle, port);
+
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		printf("ERROR opening socket");
+	
+	memset(&serv_addr, '\0', sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;     
+	serv_addr.sin_port = htons(port);    
+	serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
+//	bzero(&(serv_addr.sin_zero), 8);  
+
+	sendhandletoserver(handle);
+
+
+//Começa uma thread para receber mensagens e outra para enviar
+	pthread_create(&thr_client_display, NULL, receivemessage, &sockfd);
+	pthread_create(&thr_client_input, NULL, sendmessage, &sockfd);
+	
+	pthread_join(thr_client_display, NULL);
+	pthread_join(thr_client_input, NULL);
+	close(sockfd);
+	return 0;
 }
