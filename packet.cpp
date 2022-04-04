@@ -1,6 +1,9 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
  
  typedef struct __packet{
 	uint16_t type; //Tipo do pacote (p.ex. DATA | CMD)
@@ -9,7 +12,6 @@
 	uint16_t timestamp; // Timestamp do dado
 	char* _payload; //Dados da mensagem
  } packet;
-
 
 //pega o tempo no momento da chamada
 int getcurrenttime(){
@@ -30,7 +32,7 @@ void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* 
 	msg.timestamp = timestamp;
 
 	sendto(sockfd, &msg, sizeof(msg), 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
-    printf("[+] Data sent: %s\n",msg._payload);
+    printf("Message data %i, %i, %i, %i, %s.\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);;
 }
 // só recebe o packet, chamado pelo recvprintpacket
 void recvpacket(int sockfd, packet* msg, struct sockaddr_in serv_addr){
@@ -44,7 +46,7 @@ void recvpacket(int sockfd, packet* msg, struct sockaddr_in serv_addr){
                 ((*msg).length)*sizeof(char));
 
         recvfrom(sockfd, (*msg)._payload, sizeof((*msg)._payload), 0, (struct sockaddr *) &serv_addr, &addr_size);
-        printf("[+] Data received: %s\n", msg->_payload);
+        printf("[+] Data received: %i, %i, %i, %i, %s\n",msg->type, msg->seqn, msg->length, msg->timestamp, msg->_payload);
 
     }
     else{

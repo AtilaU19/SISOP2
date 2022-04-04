@@ -14,9 +14,25 @@
 #define PORT 4000
 #define SIGINT 2
 int sockfd, n;
+struct sockaddr_in serv_addr;
+
+pthread_mutex_t send_mutex =  PTHREAD_MUTEX_INITIALIZER; 
+pthread_mutex_t follow_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
+typedef struct thread_parameters{ 
+	int sockfd;
+	int flag;
+	int userid;
+}thread_parameters;
 
+typedef struct notification{
+	uint32_t id; //Identificador da notificação (sugere-se um identificador único)
+ 	uint32_t timestamp; //Timestamp da notificação
+ 	uint16_t length; //Tamanho da mensagem
+ 	uint16_t pending; //Quantidade de leitores pendentes
+ 	const char* _string; //Mensagem
+}notification;
 
 //ctrl c handle
 void signalHandler(int signal) {
@@ -26,17 +42,71 @@ void signalHandler(int signal) {
    exit(0);
 }
 
+
+// IMPLEMENTAR ESSES DOIS
+void sendhandler();
+
+void followhandler();
+
+void *clientmessagehandler(void *arg){
+	thread_parameters *par = (thread_parameters*) arg;
+	int userid = par->userid;
+	int sockfd = par->sockfd;
+	char newfollow[21];
+	packet msg;
+
+	recvpacket(sockfd, &msg, serv_addr);
+
+	while(par->flag){
+		switch(msg.type){
+			case QUIT:
+				close(sockfd);
+				par->flag = 0;
+				//TEM QUE COLOCAR BARREIRA !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+				break;
+			
+			case SEND:
+				pthread_mutex_lock(&send_mutex);
+				sendhandler();
+				pthread_mutex_unlock(&send_mutex);
+				break;
+			
+			case FOLLOW:
+				pthread_mutex_lock(&follow_mutex);
+				strcpy(newfollow, msg._payload);
+				followhandler();
+				pthread_mutex_unlock(&follow_mutex);
+				break;
+			
+			default:
+				printf("Unknown message type received.");
+				exit(1);
+				break;
+		}
+		free(msg._payload);
+			
+	}
+	return;
+}
+
+// IMPLEMENTAR
+void *notificationhandler(void *arg){
+	return;
+}
+
 int main(int argc, char *argv[])
 {
 	int one = 1;
-	int sockfd; 
+	int sockfd, i; 
 	socklen_t clilen;
 	struct sockaddr_in serv_addr, cli_addr;
 	packet msg;
+	thread_parameters threadparams[CLIENTLIMIT];
+	pthread_t client_pthread[2*CLIENTLIMIT];
 		
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) 
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
 		printf("ERROR opening socket");
-
+	}
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(PORT);
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
@@ -46,10 +116,10 @@ int main(int argc, char *argv[])
 		printf("Failed setsockopt.");
 		exit(1);
 	}
-	printf("chegou 1");
+
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0) 
 		printf("ERROR on binding");
-	printf("chegou 2");
+
 	clilen = sizeof(struct sockaddr_in);
 
 	printf("Server initialized");
@@ -63,11 +133,14 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 
-		exit(0);
-		/* send to socket */
-//		n = sendto(sockfd, "Got your message\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//		if (n  < 0) 
-//			printf("ERROR on sendto");
+		if((pthread_create(&client_pthread[i], NULL, clientmessagehandler, &threadparams[i]) != 0 )){
+			printf("Client message handler thread did not open succesfully.\n");
+		}
+		
+		if((pthread_create(&client_pthread[i+1], NULL, notificationhandler, &threadparams[i]) != 0 )){
+			printf("Notification handler thread did not open succesfully.\n");
+		}
+		i+=2;
 	}
 	
 	close(sockfd);

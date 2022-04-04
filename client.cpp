@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <time.h>
 #include <pthread.h>
 #include "commons.h"
 #include "packet.cpp"
@@ -68,7 +67,7 @@ void *sendmessage(void *arg){
 				sendpacket(sockfd, FOLLOW, ++seqncnt,  strlen(buffer)-7, getcurrenttime(), buffer+7*sizeof(char), serv_addr);
 				break;
 			default:
-				printf("Action unknown. Should be:\nSEND <message>\nFOLLOW <@user>\nQUIT");	
+				printf("Action unknown. Should be:\nSEND <message>\nFOLLOW <@user>\nQUIT\n");	
 		}
 	}
 }

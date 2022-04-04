@@ -6,6 +6,6 @@
 #define SEND 2
 #define FOLLOW 3
 #define NOTIFICATION 4
-#define SERVERMSG 5
-#define LOGUSER 6
+#define LOGUSER 5
+#define CLIENTLIMIT 500
 #endif
