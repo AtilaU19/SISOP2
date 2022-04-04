@@ -14,8 +14,8 @@
 
 #define PORT 4000
 #define SIGINT 2
-int sockfd, n;
-struct sockaddr_in serv_addr;
+int sockfd, n, seqncount;	
+struct sockaddr_in serv_addr, cli_addr;
 
 pthread_mutex_t send_mutex =  PTHREAD_MUTEX_INITIALIZER; 
 pthread_mutex_t follow_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -27,6 +27,7 @@ typedef struct thread_parameters{
 	int sockfd;
 	int flag;
 	int userid;
+
 }thread_parameters;
 //ctrl c handle
 void signalHandler(int signal) {
@@ -175,8 +176,57 @@ void *clientmessagehandler(void *arg){
 	return;
 }
 
-// IMPLEMENTAR
+// handles client consumes (sending the notifications from their followers)
 void *notificationhandler(void *arg){
+	thread_parameters *par  = (thread_parameters*) arg;
+	int sockfd = par->sockfd;
+	int userid = par->userid;
+	ids_notification notifid;
+	profile *user = &list_of_profiles[userid];
+	notification *notif;
+	char* payload;
+//using the same flag as other thread to maintain both synced up
+	while(par->flag){
+		//for each pending notification send message to user
+		for(int i = 0; i < user->pending_notif_count; i++){
+			notifid = user->list_pending_notif[i];
+			//if notification exists then sends
+			if (notifid.userid_notif != -1){
+				//gets notification 
+				notif = list_of_profiles[notifid.userid_notif].list_send_notif[notifid.id_notif];
+				payload = malloc(notif->length+strlen(notif->sender) + 12*sizeof(char));
+				//talvez o sprintf seja necessário pra colocar o valor na payload mas vamo ver
+
+				//sends notification
+				sendpacket(sockfd, NOTIFICATION, ++seqncount, sizeof(payload), getcurrenttime(),  payload, cli_addr);
+				free(payload);
+
+				//IMPLEMENTAR BARRIER
+
+				//locks mutex to change list of notifications without having other thread take from it at the same time
+				pthread_mutex_lock(&send_mutex);
+
+				if(par->flag){
+					//see if notification has not been deleted by another client of same user
+					if(user->list_pending_notif[i].userid_notif != -1){
+
+						notif->pending--;
+						if(notif->pending == 0){
+							//user no longer has notifications, notification is deleted
+							notif = NULL;
+						}
+
+						//deletes notification from users list of pending notifications
+						user->list_pending_notif[i].userid_notif = -1;
+						user->list_pending_notif[i].id_notif = -1;
+					}
+				}
+				//unlocks thread after removing notification from list, avoids conflicts between threads
+				pthread_mutex_unlock(&send_mutex);
+
+			}
+		}
+	}
 	return;
 }
 
@@ -185,7 +235,6 @@ int main(int argc, char *argv[])
 	int one = 1;
 	int sockfd, i; 
 	socklen_t clilen;
-	struct sockaddr_in serv_addr, cli_addr;
 	packet msg;
 	thread_parameters threadparams[CLIENTLIMIT];
 	pthread_t client_pthread[2*CLIENTLIMIT];
