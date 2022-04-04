@@ -25,7 +25,7 @@ typedef struct thread_parameters{
 	int flag;
 	int userid;
 }thread_parameters;
-
+/////////////////////retirar daqui, colocada em profile///////////
 typedef struct notification{
 	uint32_t id; //Identificador da notificação (sugere-se um identificador único)
  	uint32_t timestamp; //Timestamp da notificação
@@ -44,9 +44,69 @@ void signalHandler(int signal) {
 
 
 // IMPLEMENTAR ESSES DOIS
-void sendhandler();
+///////////////////////////////////////////////////apenas copiado,/////////////////////////
+void sendhandler(notification *notif, packet message, int profile_id, int newsockfd){
+ 
+   profile *p;
+   int num_pnd_notifs;
+   int num_followers = profile_list[profile_id].num_followers;
+   int notif_id;
+   
+   //Update notif id
+   notif_id = profile_list[profile_id].num_snd_notifs;
+   profile_list[profile_id].num_snd_notifs++;
 
-void followhandler();
+   if(notif_id == MAX_NOTIFS){//Making it circular, will erase the first notification 
+      notif_id = 0;           //if the server didnt send it (it should have by then)
+   }
+
+   //Create notification
+   notif =  malloc(sizeof(notification));
+   notif->id = notif_id;
+   notif->sender = profile_list[profile_id].name;
+   notif->timestamp = message.timestamp;
+   notif->msg = (char*)malloc(strlen(message.payload)*sizeof(char)+sizeof(char));
+   memcpy(notif->msg,message.payload,strlen(message.payload)*sizeof(char)+sizeof(char));
+   notif->len = message.len;
+   notif->pending = profile_list[profile_id].num_followers;
+
+   //Putting the notification on the current profile as send
+   profile_list[profile_id].snd_notifs[notif_id] = notif;
+
+   //Putting the notification of followers pending list
+   for(int i=0; i< num_followers;i++){
+
+      p = profile_list[profile_id].followers[i];
+
+      num_pnd_notifs = p->num_pnd_notifs; 
+      p->num_pnd_notifs++;
+
+      if(p->num_pnd_notifs == MAX_NOTIFS){//Making it circular, will erase the first notification 
+         p->num_pnd_notifs =0;           //if the server didnt send it (it should have by then)
+      }
+
+      p->pnd_notifs[num_pnd_notifs].notif_id= notif_id;
+      p->pnd_notifs[num_pnd_notifs].profile_id= profile_id;
+   
+   }
+
+   //UPDATE THE RMS
+   primary_multicast(profile_id, CMD_SEND, message.sqn, strlen(message.payload)+1,message.timestamp,message.payload);
+   
+
+   //SAVE PROFILES
+   save_profiles(profile_list,this_rm.id);
+
+   //SEND TO USER SEND WAS SUCCESSFULL
+   char payload[100];
+   strcpy(payload,"SEND executou com sucesso.");
+   send_packet(newsockfd,CMD_SEND,++sqncnt,strlen(payload)+1,0,payload);  
+}
+//////////////////////////////////////////////////////////////////////////////////////
+
+void followhandler(){
+
+}
 
 void *clientmessagehandler(void *arg){
 	thread_parameters *par = (thread_parameters*) arg;
