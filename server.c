@@ -9,7 +9,8 @@
 #include <signal.h>
 #include <pthread.h>
 #include "commons.h"
-#include "packet.cpp"
+#include "packet.c"
+#include "profile.c"
 
 #define PORT 4000
 #define SIGINT 2
@@ -19,21 +20,14 @@ struct sockaddr_in serv_addr;
 pthread_mutex_t send_mutex =  PTHREAD_MUTEX_INITIALIZER; 
 pthread_mutex_t follow_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+profile list_of_profiles[MAX_CLIENTS];
+
 
 typedef struct thread_parameters{ 
 	int sockfd;
 	int flag;
 	int userid;
 }thread_parameters;
-/////////////////////retirar daqui, colocada em profile///////////
-typedef struct notification{
-	uint32_t id; //Identificador da notificação (sugere-se um identificador único)
- 	uint32_t timestamp; //Timestamp da notificação
- 	uint16_t length; //Tamanho da mensagem
- 	uint16_t pending; //Quantidade de leitores pendentes
- 	const char* _string; //Mensagem
-}notification;
-
 //ctrl c handle
 void signalHandler(int signal) {
    close(sockfd);   
@@ -42,70 +36,101 @@ void signalHandler(int signal) {
    exit(0);
 }
 
+int is_follow_valid(int followid,int userid, char *user_name, int sockfd){
+   char payload[100];
+//return false if user already follows them
+   for(int i=0;i<list_of_profiles[followid].follower_count;i++){
+      if(strcmp(list_of_profiles[followid].followed_users[i]->user_name,list_of_profiles[userid].user_name)==0){
+         return 0;
+    	}
+
+   	}
+//return false if user does not exist in list of users
+   if(followid == -1){ 
+      return 0;
+   	}
+//return false if user tries to follow themselves
+   if(strcmp(user_name,list_of_profiles[userid].user_name) == 0 ){
+      return 0;
+   	}
+	else{
+		return 1;
+
+   }
+}
 
 // IMPLEMENTAR ESSES DOIS
 ///////////////////////////////////////////////////apenas copiado,/////////////////////////
-void sendhandler(notification *notif, packet message, int profile_id, int newsockfd){
+void sendhandler(notification *notif, packet msg, int userid, int sockfd){
  
    profile *p;
-   int num_pnd_notifs;
-   int num_followers = profile_list[profile_id].num_followers;
-   int notif_id;
+   int pending_notif_count;
+   int num_followers = list_of_profiles[userid].follower_count;
+   int id_notif;
    
    //Update notif id
-   notif_id = profile_list[profile_id].num_snd_notifs;
-   profile_list[profile_id].num_snd_notifs++;
+   id_notif = list_of_profiles[userid].sent_notif_count;
+   list_of_profiles[userid].sent_notif_count++;
 
-   if(notif_id == MAX_NOTIFS){//Making it circular, will erase the first notification 
-      notif_id = 0;           //if the server didnt send it (it should have by then)
+   if(id_notif == MAX_NOTIFS){//Making it circular, will erase the first notification 
+      id_notif = 0;           //if the server didnt send it (it should have by then)
    }
 
    //Create notification
-   notif =  malloc(sizeof(notification));
-   notif->id = notif_id;
-   notif->sender = profile_list[profile_id].name;
-   notif->timestamp = message.timestamp;
-   notif->msg = (char*)malloc(strlen(message.payload)*sizeof(char)+sizeof(char));
-   memcpy(notif->msg,message.payload,strlen(message.payload)*sizeof(char)+sizeof(char));
-   notif->len = message.len;
-   notif->pending = profile_list[profile_id].num_followers;
+   notif = malloc(sizeof(&notif));
+   notif->id = id_notif;
+   notif->sender = list_of_profiles[userid].user_name;
+   notif->timestamp = msg.timestamp;
+   notif->_string = (char*)malloc(strlen(msg._payload)*sizeof(char)+sizeof(char));
+   memcpy(notif->_string,msg._payload,strlen(msg._payload)*sizeof(char)+sizeof(char));
+   notif->length = msg.length;
+   notif->pending = list_of_profiles[userid].follower_count;
 
    //Putting the notification on the current profile as send
-   profile_list[profile_id].snd_notifs[notif_id] = notif;
+   list_of_profiles[userid].list_send_notif[id_notif] = notif;
 
    //Putting the notification of followers pending list
    for(int i=0; i< num_followers;i++){
 
-      p = profile_list[profile_id].followers[i];
+      p = list_of_profiles[userid].followed_users[i];
 
-      num_pnd_notifs = p->num_pnd_notifs; 
-      p->num_pnd_notifs++;
+      pending_notif_count = p->pending_notif_count; 
+      p->pending_notif_count++;
 
-      if(p->num_pnd_notifs == MAX_NOTIFS){//Making it circular, will erase the first notification 
-         p->num_pnd_notifs =0;           //if the server didnt send it (it should have by then)
+      if(p->pending_notif_count == MAX_NOTIFS){
+         p->pending_notif_count =0;           
       }
 
-      p->pnd_notifs[num_pnd_notifs].notif_id= notif_id;
-      p->pnd_notifs[num_pnd_notifs].profile_id= profile_id;
+      p->list_pending_notif[pending_notif_count].id_notif= id_notif;
+      p->list_pending_notif[pending_notif_count].userid_notif= userid;
    
    }
-
-   //UPDATE THE RMS
-   primary_multicast(profile_id, CMD_SEND, message.sqn, strlen(message.payload)+1,message.timestamp,message.payload);
-   
-
-   //SAVE PROFILES
-   save_profiles(profile_list,this_rm.id);
-
-   //SEND TO USER SEND WAS SUCCESSFULL
-   char payload[100];
-   strcpy(payload,"SEND executou com sucesso.");
-   send_packet(newsockfd,CMD_SEND,++sqncnt,strlen(payload)+1,0,payload);  
+ 
 }
 //////////////////////////////////////////////////////////////////////////////////////
 
-void followhandler(){
+void followhandler(char *user_name, int userid, int sockfd){
+   int followid;
+   int followercount;
 
+   followid = get_profile_id(list_of_profiles,user_name);
+
+   //check if follower exists and is not already followed/is not the user
+   if(!is_follow_valid(followid,userid,user_name,sockfd))
+      return;
+  
+   //check if follower has not exceeded follower limit
+   followercount =  list_of_profiles[followid].follower_count;
+   if (followercount >= MAX_FOLLOW){
+	   printf("User has reached max followers and could not follow %s", user_name);
+   }
+    
+   //ADD FOLLOWER
+   list_of_profiles[followid].follower_count++;
+   list_of_profiles[followid].followed_users[followercount] =  &list_of_profiles[followid];
+
+   printf("User %s just followed %s ", user_name );
+ 
 }
 
 void *clientmessagehandler(void *arg){
@@ -114,6 +139,7 @@ void *clientmessagehandler(void *arg){
 	int sockfd = par->sockfd;
 	char newfollow[21];
 	packet msg;
+	notification *notif;
 
 	recvpacket(sockfd, &msg, serv_addr);
 
@@ -127,14 +153,14 @@ void *clientmessagehandler(void *arg){
 			
 			case SEND:
 				pthread_mutex_lock(&send_mutex);
-				sendhandler();
+				sendhandler(notif, msg, userid, sockfd);
 				pthread_mutex_unlock(&send_mutex);
 				break;
 			
 			case FOLLOW:
 				pthread_mutex_lock(&follow_mutex);
 				strcpy(newfollow, msg._payload);
-				followhandler();
+				followhandler(newfollow, userid, sockfd);
 				pthread_mutex_unlock(&follow_mutex);
 				break;
 			

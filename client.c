@@ -9,7 +9,7 @@
 #include <string.h>
 #include <pthread.h>
 #include "commons.h"
-#include "packet.cpp"
+#include "packet.c"
 
 int sockfd;
 int seqncnt = 0;
