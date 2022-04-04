@@ -54,7 +54,7 @@ typedef struct profile{
  } profile;
 
 /////pode abrir cabeçalhos do profile.c//////
-int profile_handler(profile *list_of_profiles, char *username, int newsockfd, int sqncnt){
+int profile_handler(profile *list_of_profiles, char *username, int newsockfd, int sqncnt){//add profile if it doesn't exist, else add to online
 	
 	int profile_id = get_profile_id(profile_list,username);
 
@@ -139,7 +139,7 @@ int get_profile_id(profile *list_of_profiles, char *username){//Gets a profile b
 	return -1;
 } 
 
-void print_profile_pointers(profile** profile_pointers){
+void print_profile_pointers(profile** profile_pointers){ //
 		profile p;
 	for(int i =0; i<MAX_FOLLOW; i++){
 		p = (*profile_pointers)[i];
@@ -149,7 +149,7 @@ void print_profile_pointers(profile** profile_pointers){
 	}
 }
 
-void print_pnd_notifs(profile p){
+void print_pnd_notifs(profile p){ //pinta notificações pendentes do usuário
 		profile p;
 	for(int i =0; i<MAX_FOLLOW; i++){
 		p = (*profile_pointers)[i];
