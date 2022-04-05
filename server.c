@@ -20,7 +20,11 @@ struct sockaddr_in serv_addr, cli_addr;
 pthread_mutex_t send_mutex =  PTHREAD_MUTEX_INITIALIZER; 
 pthread_mutex_t follow_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-profile list_of_profiles[MAX_CLIENTS];
+//barreira do consumidor//
+pthread_barrier_t  barriers[CLIENTLIMIT];
+
+//lista de profiles//
+profile list_of_profiles[CLIENTLIMIT];
 
 
 typedef struct thread_parameters{ 
@@ -33,7 +37,7 @@ typedef struct thread_parameters{
 //ctrl c handle
 void signalHandler(int signal) {
    close(sockfd);   
-//   save_profiles(profile_list);
+//   save_profiles(list_of_profiles);
    printf("\nServer ended successfully\n");
    exit(0);
 }
@@ -48,10 +52,12 @@ int is_follow_valid(int followid,int userid, char *user_name, int sockfd){
     	}
 
    	}
+
 //return false if user does not exist in list of users
    if(followid == -1){ 
       return 0;
    	}
+
 //return false if user tries to follow themselves
    if(strcmp(user_name,list_of_profiles[userid].user_name) == 0 ){
       return 0;
@@ -74,7 +80,7 @@ void followhandler(char *user_name, int userid, int sockfd){
   
    //check if follower has not exceeded follower limit
    followercount =  list_of_profiles[followid].follower_count;
-   if (followercount >= MAX_FOLLOW){
+   if (followercount >= FOLLOWLIMIT){
 	   printf("User has reached max followers and could not follow %s", user_name);
    }
     
@@ -97,7 +103,7 @@ void sendhandler(notification *notif, packet msg, int userid, int sockfd){
    id_notif = list_of_profiles[userid].sent_notif_count;
    list_of_profiles[userid].sent_notif_count++;
 
-   if(id_notif == MAX_NOTIFS){//Making it circular, will erase the first notification 
+   if(id_notif == NOTIFLIMIT){//Making it circular, will erase the first notification 
       id_notif = 0;           //if the server didnt send it (it should have by then)
    }
 
@@ -122,7 +128,7 @@ void sendhandler(notification *notif, packet msg, int userid, int sockfd){
       pending_notif_count = p->pending_notif_count; 
       p->pending_notif_count++;
 
-      if(p->pending_notif_count == MAX_NOTIFS){
+      if(p->pending_notif_count == NOTIFLIMIT){
          p->pending_notif_count =0;           
       }
 
@@ -229,6 +235,13 @@ void *notificationhandler(void *arg){
 	return;
 }
 
+void init_barriers(){		//inicializa barreiras
+
+   for(int i=0;i<CLIENTLIMIT;i++){
+       pthread_barrier_init (&barriers[i], NULL, 0);
+   }
+}
+
 int main(int argc, char *argv[])
 {
 	int one = 1;
@@ -237,7 +250,12 @@ int main(int argc, char *argv[])
 	packet msg;
 	thread_parameters threadparams[CLIENTLIMIT];
 	pthread_t client_pthread[2*CLIENTLIMIT];
-		
+
+	//incialização das structs
+	init_profiles(list_of_profiles);
+    read_profiles(list_of_profiles);
+    init_barriers();
+
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
 		printf("ERROR opening socket");
 	}

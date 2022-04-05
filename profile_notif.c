@@ -1,20 +1,10 @@
 #ifndef PROFILE_H
-
+#define PROFILE_H
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-
-#define PROFILE_H
-#define MAX_CLIENTS 500
-#define MAX_FOLLOW 500
-
-/////////////////notification.h + notification.c///////////
-
-#define MAX_NOTIFS 500
-
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include "commons.h"
 
 typedef struct notification{
 	uint32_t id; //Identificador da notificação (sugere-se um identificador único)
@@ -36,24 +26,60 @@ void printNotif(notification notif){ //           sender não definido //
     printf("[%.0i:%2.0i] %s - %s\n", notif.timestamp/100, notif.timestamp%100, notif.sender, notif._string);
 }
 
-////////////////////////profile.h///////////////////
-
 typedef struct profile{
  char* user_name;                  // Profile identifier (@(...))
  int   online_sessions;            // Number of sessions open with this specific user
  
  int follower_count;             //Number of followers of this user
- struct profile* followed_users[MAX_FOLLOW];  // List of people that follow his profile
+ struct profile* followed_users[FOLLOWLIMIT];  // List of people that follow his profile
 
  int sent_notif_count; //Number of sent notifs
- notification* list_send_notif[MAX_NOTIFS]; // List of send notifs
+ notification* list_send_not]; //LIMITList of send notifs
  
  int pending_notif_count; 
- ids_notification list_pending_notif[MAX_NOTIFS]; // List of notification identifiers
+ ids_notification list_pending_not]; //LIMITList of notification identifiers
  
- } profile;
+} profile;
 
-/////pode abrir cabeçalhos do profile.c//////
+int insert_profile(profile *list_of_profiles, char* username){		//cria uma nova profile
+		
+		for(int i =0; i<CLIENTLIMIT; i++){								//seta seus valores iniciais
+        if(list_of_profiles[i].user_name == ""){
+        	
+        	list_of_profiles[i].user_name = (char*)malloc(strlen(username)+1);
+            strcpy(list_of_profiles[i].user_name,username);
+            list_of_profiles[i].online_sessions = 1;
+            list_of_profiles[i].num_followers = 0;
+            list_of_profiles[i].num_snd_notifs = 0;
+            list_of_profiles[i].num_pnd_notifs = 0;
+
+            //Initializing pending and send notifications
+            for(int j=0; j++LIMIT{
+
+            	list_of_profiles[i].pnd_notifs[j].notif_id = -1;
+            	list_of_profiles[i].pnd_notifs[j].profile_id = -1;
+            	list_of_profiles[i].snd_notifs[j]= NULL;
+            }
+			
+            return i;
+        }
+    }
+
+    return -1
+}
+
+int get_profile_id(profile *list_of_profiles, char *username){//Gets a profile bid by name
+		for(int i =0; i<CLIENTLIMIT; i++){
+		if(list_of_profiles[i].user_name != ""){
+			
+			if(strcmp(list_of_profiles[i].user_name,username)== 0){
+				return i;
+			}
+		}
+	}
+	return -1;
+}
+
 int profile_handler(profile *list_of_profiles, char *username, int sockfd, int sqncnt){//add profile if it doesn't exist, else add to online
 	
 	int profile_id = get_profile_id(list_of_profiles,username);
@@ -84,78 +110,11 @@ int profile_handler(profile *list_of_profiles, char *username, int sockfd, int s
 	return profile_id;
 }
 
-void profiles_initializer(profile *list_of_profiles){		//inicializa todas profiles da lista com nome vazio e 0 em online			
-		for(int i =0; i<MAX_CLIENTS; i++){
+void init_profiles(profile *list_of_profiles){		//inicializa todas profiles da lista com nome vazio e 0 em online			
+		for(int i =0; i<CLIENTLIMIT; i++){
 			list_of_profiles[i].user_name= "";
 			list_of_profiles[i].online_sessions= 0;
 	}
 } 
-
-void print_profiles(profile* list_of_profiles){				//printa todas profiles da lista
-
-	for(int i =0; i<MAX_CLIENTS; i++){
-		if(list_of_profiles[i].user_name != ""){
-			printf("Profile: %s Online %d\n", list_of_profiles[i].user_name, list_of_profiles[i].online_sessions);
-		}
-	}
-}
-
-int insert_profile(profile *list_of_profiles, char* username){		//cria uma nova profile
-		
-		for(int i =0; i<MAX_CLIENTS; i++){								//seta seus valores iniciais
-        if(list_of_profiles[i].user_name == ""){
-        	
-        	list_of_profiles[i].user_name = (char*)malloc(strlen(username)+1);
-            strcpy(list_of_profiles[i].user_name,username);
-            list_of_profiles[i].online_sessions = 1;
-            list_of_profiles[i].num_followers = 0;
-            list_of_profiles[i].num_snd_notifs = 0;
-            list_of_profiles[i].num_pnd_notifs = 0;
-
-            //Initializing pending and send notifications
-            for(int j=0;j<MAX_NOTIFS; j++){
-
-            	list_of_profiles[i].pnd_notifs[j].notif_id = -1;
-            	list_of_profiles[i].pnd_notifs[j].profile_id = -1;
-            	list_of_profiles[i].snd_notifs[j]= NULL;
-            }
-			
-            return i;
-        }
-    }
-
-    return -1
-} 
-int get_profile_id(profile *list_of_profiles, char *username){//Gets a profile bid by name
-		for(int i =0; i<MAX_CLIENTS; i++){
-		if(list_of_profiles[i].user_name != ""){
-			
-			if(strcmp(list_of_profiles[i].user_name,username)== 0){
-				return i;
-			}
-		}
-	}
-	return -1;
-} 
-
-void print_profile_pointers(profile** profile_pointers){ //
-		profile p;
-	for(int i =0; i<MAX_FOLLOW; i++){
-		p = (*profile_pointers)[i];
-		if(p.user_name != ""){
-			printf("Profile: %s Online %d\n", p.user_name, p.online_sessions);
-		}
-	}
-}
-
-void print_pnd_notifs(profile p){ //printa notificações pendentes do usuário
-		profile p;
-	for(int i =0; i<MAX_FOLLOW; i++){
-		p = (*profile_pointers)[i];
-		if(p.user_name != ""){
-			printf("Profile: %s Online %d\n", p.user_name, p.online_sessions);
-		}
-	}
-}
 
 #endif
