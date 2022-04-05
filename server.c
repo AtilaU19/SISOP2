@@ -10,7 +10,7 @@
 #include <pthread.h>
 #include "commons.h"
 #include "packet.c"
-#include "profile.c"
+#include "profile_notif.c"
 
 #define PORT 4000
 #define SIGINT 2
@@ -29,6 +29,7 @@ typedef struct thread_parameters{
 	int userid;
 
 }thread_parameters;
+
 //ctrl c handle
 void signalHandler(int signal) {
    close(sockfd);   
@@ -37,6 +38,7 @@ void signalHandler(int signal) {
    exit(0);
 }
 
+///////////////verifica se o follow é válido//////////////////
 int is_follow_valid(int followid,int userid, char *user_name, int sockfd){
    char payload[100];
 //return false if user already follows them
@@ -60,8 +62,30 @@ int is_follow_valid(int followid,int userid, char *user_name, int sockfd){
    }
 }
 
-// IMPLEMENTAR ESSES DOIS
-///////////////////////////////////////////////////apenas copiado,/////////////////////////
+void followhandler(char *user_name, int userid, int sockfd){
+   int followid;
+   int followercount;
+
+   followid = get_profile_id(list_of_profiles,user_name);
+
+   //check if follower exists and is not already followed/is not the user
+   if(!is_follow_valid(followid,userid,user_name,sockfd))
+      return;
+  
+   //check if follower has not exceeded follower limit
+   followercount =  list_of_profiles[followid].follower_count;
+   if (followercount >= MAX_FOLLOW){
+	   printf("User has reached max followers and could not follow %s", user_name);
+   }
+    
+   //ADD FOLLOWER
+   list_of_profiles[followid].follower_count++;
+   list_of_profiles[followid].followed_users[followercount] =  &list_of_profiles[followid];
+
+   printf("User %s just followed %s ", user_name );
+ 
+}
+
 void sendhandler(notification *notif, packet msg, int userid, int sockfd){
  
    profile *p;
@@ -106,31 +130,6 @@ void sendhandler(notification *notif, packet msg, int userid, int sockfd){
       p->list_pending_notif[pending_notif_count].userid_notif= userid;
    
    }
- 
-}
-//////////////////////////////////////////////////////////////////////////////////////
-
-void followhandler(char *user_name, int userid, int sockfd){
-   int followid;
-   int followercount;
-
-   followid = get_profile_id(list_of_profiles,user_name);
-
-   //check if follower exists and is not already followed/is not the user
-   if(!is_follow_valid(followid,userid,user_name,sockfd))
-      return;
-  
-   //check if follower has not exceeded follower limit
-   followercount =  list_of_profiles[followid].follower_count;
-   if (followercount >= MAX_FOLLOW){
-	   printf("User has reached max followers and could not follow %s", user_name);
-   }
-    
-   //ADD FOLLOWER
-   list_of_profiles[followid].follower_count++;
-   list_of_profiles[followid].followed_users[followercount] =  &list_of_profiles[followid];
-
-   printf("User %s just followed %s ", user_name );
  
 }
 
