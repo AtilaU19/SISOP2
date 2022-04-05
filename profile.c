@@ -69,7 +69,7 @@ int profile_handler(profile *list_of_profiles, char *username, int sockfd, int s
 		}
 	} 
 	else{
-		if(list_of_profiles[profile_id].online > 1){ 					//se o usuário já existe, verifica-se se não excedeu o número máximo de 2 sessões online por usuário
+		if(list_of_profiles[profile_id].online_sessions > 1){ 					//se o usuário já existe, verifica-se se não excedeu o número máximo de 2 sessões online por usuário
 			
 			printf("Um usuario tentou exceder o numero de acessos.\n");
 			send_packet(sockfd,CMD_QUIT,sqncnt,4,0,"quit");			//caso excedido, sistema da quit e fecha socket
@@ -77,7 +77,7 @@ int profile_handler(profile *list_of_profiles, char *username, int sockfd, int s
 			return -1;
 		}
 		else{
-			list_of_profiles[profile_id].online +=1;				//aumenta em 1 a quantia de usuários online
+			list_of_profiles[profile_id].online_sessions +=1;				//aumenta em 1 a quantia de usuários online
 		}
 	}
 
@@ -86,16 +86,16 @@ int profile_handler(profile *list_of_profiles, char *username, int sockfd, int s
 
 void profiles_initializer(profile *list_of_profiles){		//inicializa todas profiles da lista com nome vazio e 0 em online			
 		for(int i =0; i<MAX_CLIENTS; i++){
-			list_of_profiles[i].name= "";
-			list_of_profiles[i].online= 0;
+			list_of_profiles[i].user_name= "";
+			list_of_profiles[i].online_sessions= 0;
 	}
 } 
 
 void print_profiles(profile* list_of_profiles){				//printa todas profiles da lista
 
 	for(int i =0; i<MAX_CLIENTS; i++){
-		if(list_of_profiles[i].name != ""){
-			printf("Profile: %s Online %d\n", list_of_profiles[i].name, list_of_profiles[i].online);
+		if(list_of_profiles[i].user_name != ""){
+			printf("Profile: %s Online %d\n", list_of_profiles[i].user_name, list_of_profiles[i].online_sessions);
 		}
 	}
 }
@@ -103,11 +103,11 @@ void print_profiles(profile* list_of_profiles){				//printa todas profiles da li
 int insert_profile(profile *list_of_profiles, char* username){		//cria uma nova profile
 		
 		for(int i =0; i<MAX_CLIENTS; i++){								//seta seus valores iniciais
-        if(list_of_profiles[i].name == ""){
+        if(list_of_profiles[i].user_name == ""){
         	
-        	list_of_profiles[i].name = (char*)malloc(strlen(username)+1);
-            strcpy(list_of_profiles[i].name,username);
-            list_of_profiles[i].online = 1;
+        	list_of_profiles[i].user_name = (char*)malloc(strlen(username)+1);
+            strcpy(list_of_profiles[i].user_name,username);
+            list_of_profiles[i].online_sessions = 1;
             list_of_profiles[i].num_followers = 0;
             list_of_profiles[i].num_snd_notifs = 0;
             list_of_profiles[i].num_pnd_notifs = 0;
@@ -128,9 +128,9 @@ int insert_profile(profile *list_of_profiles, char* username){		//cria uma nova 
 } 
 int get_profile_id(profile *list_of_profiles, char *username){//Gets a profile bid by name
 		for(int i =0; i<MAX_CLIENTS; i++){
-		if(list_of_profiles[i].name != ""){
+		if(list_of_profiles[i].user_name != ""){
 			
-			if(strcmp(list_of_profiles[i].name,username)== 0){
+			if(strcmp(list_of_profiles[i].user_name,username)== 0){
 				return i;
 			}
 		}
@@ -142,8 +142,8 @@ void print_profile_pointers(profile** profile_pointers){ //
 		profile p;
 	for(int i =0; i<MAX_FOLLOW; i++){
 		p = (*profile_pointers)[i];
-		if(p.name != ""){
-			printf("Profile: %s Online %d\n", p.name, p.online);
+		if(p.user_name != ""){
+			printf("Profile: %s Online %d\n", p.user_name, p.online_sessions);
 		}
 	}
 }
@@ -152,8 +152,8 @@ void print_pnd_notifs(profile p){ //printa notificações pendentes do usuário
 		profile p;
 	for(int i =0; i<MAX_FOLLOW; i++){
 		p = (*profile_pointers)[i];
-		if(p.name != ""){
-			printf("Profile: %s Online %d\n", p.name, p.online);
+		if(p.user_name != ""){
+			printf("Profile: %s Online %d\n", p.user_name, p.online_sessions);
 		}
 	}
 }
