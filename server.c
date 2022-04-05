@@ -152,9 +152,13 @@ void *clientmessagehandler(void *arg){
 	while(par->flag){
 		switch(msg.type){
 			case QUIT:
+
+				list_of_profiles[userid].online_sessions -=1;		//remove usuário da lista de sessões abertas
+            	pthread_barrier_init (&barriers[userid], NULL, list_of_profiles[userid].online_sessions);		//
+
 				close(sockfd);
 				par->flag = 0;
-				//TEM QUE COLOCAR BARREIRA !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 				break;
 			
 			case SEND:
@@ -206,7 +210,8 @@ void *notificationhandler(void *arg){
 				sendpacket(sockfd, NOTIFICATION, ++seqncount, sizeof(payload), getcurrenttime(),  payload, cli_addr);
 				free(payload);
 
-				//IMPLEMENTAR BARRIER
+				//barrerira para usuário com mais de um client
+				pthread_barrier_wait (&barriers[userid]);
 
 				//locks mutex to change list of notifications without having other thread take from it at the same time
 				pthread_mutex_lock(&send_mutex);
