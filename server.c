@@ -71,6 +71,7 @@ int is_follow_valid(int followid,int userid, char *user_name, int sockfd){
 void followhandler(char *user_name, int userid, int sockfd){
    int followid;
    int followercount;
+   char* loggedusername = list_of_profiles[userid].user_name;
 
    followid = get_profile_id(list_of_profiles,user_name);
 
@@ -88,7 +89,7 @@ void followhandler(char *user_name, int userid, int sockfd){
    list_of_profiles[followid].follower_count++;
    list_of_profiles[followid].followed_users[followercount] =  &list_of_profiles[followid];
 
-   printf("User %s just followed %s ", user_name );
+   printf("User %s just followed %s ", user_name, loggedusername);
  
 }
 
@@ -118,7 +119,7 @@ void sendhandler(notification *notif, packet msg, int userid, int sockfd){
    notif->pending = list_of_profiles[userid].follower_count;
 
    //Putting the notification on the current profile as send
-   list_of_profiles[userid].list_send_notif[id_notif] = notif;
+   list_of_profiles[userid].list_send_not[id_notif] = notif;
 
    //Putting the notification of followers pending list
    for(int i=0; i< num_followers;i++){
@@ -132,8 +133,8 @@ void sendhandler(notification *notif, packet msg, int userid, int sockfd){
          p->pending_notif_count =0;           
       }
 
-      p->list_pending_notif[pending_notif_count].id_notif= id_notif;
-      p->list_pending_notif[pending_notif_count].userid_notif= userid;
+      p->list_pending_not[pending_notif_count].id_notif= id_notif;
+      p->list_pending_not[pending_notif_count].userid_notif= userid;
    
    }
  
@@ -147,18 +148,17 @@ void *clientmessagehandler(void *arg){
 	packet msg;
 	notification *notif;
 
-	recvpacket(sockfd, &msg, serv_addr);
+	printf("opened clientmessagehandler for user %s", list_of_profiles[userid].user_name);
+
+	recvpacket(sockfd, &msg, cli_addr);
 
 	while(par->flag){
 		switch(msg.type){
 			case QUIT:
-
 				list_of_profiles[userid].online_sessions -=1;		//remove usuário da lista de sessões abertas
-            	pthread_barrier_init (&barriers[userid], NULL, list_of_profiles[userid].online_sessions);		//
-
+            	pthread_barrier_init (&barriers[userid], NULL, list_of_profiles[userid].online_sessions);		//remove sessão das barriers, evita que um client espere por outro do mesmo usuário que já fechou
 				close(sockfd);
 				par->flag = 0;
-
 				break;
 			
 			case SEND:
@@ -182,7 +182,7 @@ void *clientmessagehandler(void *arg){
 		free(msg._payload);
 			
 	}
-	return;
+
 }
 
 // handles client consumes (sending the notifications from their followers)
@@ -194,15 +194,17 @@ void *notificationhandler(void *arg){
 	profile *user = &list_of_profiles[userid];
 	notification *notif;
 	char* payload;
+
+	printf("opened notificationhandler for user %s", list_of_profiles[userid].user_name);
 //using the same flag as other thread to maintain both synced up
 	while(par->flag){
 		//for each pending notification send message to user
 		for(int i = 0; i < user->pending_notif_count; i++){
-			notifid = user->list_pending_notif[i];
+			notifid = user->list_pending_not[i];
 			//if notification exists then sends
 			if (notifid.userid_notif != -1){
 				//gets notification 
-				notif = list_of_profiles[notifid.userid_notif].list_send_notif[notifid.id_notif];
+				notif = list_of_profiles[notifid.userid_notif].list_send_not[notifid.id_notif];
 				payload = malloc(notif->length+strlen(notif->sender) + 12*sizeof(char));
 				//talvez o sprintf seja necessário pra colocar o valor na payload mas vamo ver
 
@@ -218,7 +220,7 @@ void *notificationhandler(void *arg){
 
 				if(par->flag){
 					//see if notification has not been deleted by another client of same user
-					if(user->list_pending_notif[i].userid_notif != -1){
+					if(user->list_pending_not[i].userid_notif != -1){
 
 						notif->pending--;
 						if(notif->pending == 0){
@@ -227,8 +229,8 @@ void *notificationhandler(void *arg){
 						}
 
 						//deletes notification from users list of pending notifications
-						user->list_pending_notif[i].userid_notif = -1;
-						user->list_pending_notif[i].id_notif = -1;
+						user->list_pending_not[i].userid_notif = -1;
+						user->list_pending_not[i].id_notif = -1;
 					}
 				}
 				//unlocks thread after removing notification from list, avoids conflicts between threads
@@ -237,7 +239,7 @@ void *notificationhandler(void *arg){
 			}
 		}
 	}
-	return;
+
 }
 
 void init_barriers(){		//inicializa barreiras
@@ -258,16 +260,16 @@ int main(int argc, char *argv[])
 
 	//incialização das structs
 	init_profiles(list_of_profiles);
-    read_profiles(list_of_profiles);
+//    read_profiles(list_of_profiles);
     init_barriers();
 
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
 		printf("ERROR opening socket");
 	}
+	bzero((char *) &serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = INADDR_ANY;    
 	serv_addr.sin_port = htons(PORT);
-	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	bzero(&(serv_addr.sin_zero), 8);    
 
 	if ((setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1)){
 		printf("Failed setsockopt.");
@@ -284,8 +286,9 @@ int main(int argc, char *argv[])
 	while (TRUE) {
 		signal(SIGINT, signalHandler);
 		/* receive from socket */
-		recvpacket(sockfd, &msg, serv_addr);
+		recvpacket(sockfd, &msg, cli_addr);
 		if (msg.type != LOGUSER){
+			printf("[+] Data received: %i, %i, %i, %i, %s\n",msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
 			printf("User not logged in.");
 			exit(1);
 		}

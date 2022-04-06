@@ -34,10 +34,10 @@ typedef struct profile{
  struct profile* followed_users[FOLLOWLIMIT];  // List of people that follow his profile
 
  int sent_notif_count; //Number of sent notifs
- notification* list_send_not]; //LIMITList of send notifs
+ notification* list_send_not[NOTIFLIMIT]; //List of send notifs
  
  int pending_notif_count; 
- ids_notification list_pending_not]; //LIMITList of notification identifiers
+ ids_notification list_pending_not[NOTIFLIMIT]; //List of notification identifiers
  
 } profile;
 
@@ -49,23 +49,23 @@ int insert_profile(profile *list_of_profiles, char* username){		//cria uma nova 
         	list_of_profiles[i].user_name = (char*)malloc(strlen(username)+1);
             strcpy(list_of_profiles[i].user_name,username);
             list_of_profiles[i].online_sessions = 1;
-            list_of_profiles[i].num_followers = 0;
-            list_of_profiles[i].num_snd_notifs = 0;
-            list_of_profiles[i].num_pnd_notifs = 0;
+            list_of_profiles[i].follower_count = 0;
+            list_of_profiles[i].sent_notif_count = 0;
+            list_of_profiles[i].pending_notif_count = 0;
 
             //Initializing pending and send notifications
-            for(int j=0; j++LIMIT{
+            for(int j=0; j< NOTIFLIMIT; j++){
 
-            	list_of_profiles[i].pnd_notifs[j].notif_id = -1;
-            	list_of_profiles[i].pnd_notifs[j].profile_id = -1;
-            	list_of_profiles[i].snd_notifs[j]= NULL;
+            	list_of_profiles[i].list_pending_not[j].id_notif = -1;
+            	list_of_profiles[i].list_pending_not[j].userid_notif = -1;
+            	list_of_profiles[i].list_send_not[j]= NULL;
             }
 			
             return i;
         }
     }
 
-    return -1
+    return -1;
 }
 
 int get_profile_id(profile *list_of_profiles, char *username){//Gets a profile bid by name
@@ -80,34 +80,34 @@ int get_profile_id(profile *list_of_profiles, char *username){//Gets a profile b
 	return -1;
 }
 
-int profile_handler(profile *list_of_profiles, char *username, int sockfd, int sqncnt){//add profile if it doesn't exist, else add to online
+int profile_handler(profile *list_of_profiles, char *username, int sockfd, int seqncnt){//add profile if it doesn't exist, else add to online
 	
-	int profile_id = get_profile_id(list_of_profiles,username);
+	int userid = get_profile_id(list_of_profiles,username);
 
-	if(profile_id == -1){ //CASO NÃO EXISTA 
+	if(userid == -1){ //CASO NÃO EXISTA 
 
 		//INSERE
-		profile_id = insert_profile(list_of_profiles, username);			//insere novo profile na lista
+		userid = insert_profile(list_of_profiles, username);			//insere novo profile na lista
 
-		if(profile_id == -1){											//veririca se vaor max. não foi excedido
+		if(userid == -1){											//veririca se vaor max. não foi excedido
 			printf("MAX NUMBER OF PROFILES REACHED\n");
 			exit(1);
 		}
 	} 
 	else{
-		if(list_of_profiles[profile_id].online_sessions > 1){ 					//se o usuário já existe, verifica-se se não excedeu o número máximo de 2 sessões online por usuário
+		if(list_of_profiles[userid].online_sessions > 1){ 					//se o usuário já existe, verifica-se se não excedeu o número máximo de 2 sessões online por usuário
 			
 			printf("Um usuario tentou exceder o numero de acessos.\n");
-			send_packet(sockfd,CMD_QUIT,sqncnt,4,0,"quit");			//caso excedido, sistema da quit e fecha socket
+			//caso excedido, sistema da quit e fecha socket
 			close(sockfd);
 			return -1;
 		}
 		else{
-			list_of_profiles[profile_id].online_sessions +=1;				//aumenta em 1 a quantia de usuários online
+			list_of_profiles[userid].online_sessions +=1;				//aumenta em 1 a quantia de usuários online
 		}
 	}
 
-	return profile_id;
+	return userid;
 }
 
 void init_profiles(profile *list_of_profiles){		//inicializa todas profiles da lista com nome vazio e 0 em online			
