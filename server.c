@@ -83,6 +83,7 @@ void followhandler(char *user_name, int userid, int sockfd){
    followercount =  list_of_profiles[followid].follower_count;
    if (followercount >= FOLLOWLIMIT){
 	   printf("User has reached max followers and could not follow %s", user_name);
+	   exit(1);
    }
     
    //ADD FOLLOWER
@@ -103,10 +104,6 @@ void sendhandler(notification *notif, packet msg, int userid, int sockfd){
    //Update notif id
    id_notif = list_of_profiles[userid].sent_notif_count;
    list_of_profiles[userid].sent_notif_count++;
-
-   if(id_notif == NOTIFLIMIT){//Making it circular, will erase the first notification 
-      id_notif = 0;           //if the server didnt send it (it should have by then)
-   }
 
    //Create notification
    notif = malloc(sizeof(&notif));
@@ -283,7 +280,7 @@ int main(int argc, char *argv[])
 
 	printf("Server initialized");
 	
-	while (TRUE) {
+	while (1) {
 		signal(SIGINT, signalHandler);
 		/* receive from socket */
 		recvpacket(sockfd, &msg, cli_addr);
