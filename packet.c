@@ -52,8 +52,7 @@ void recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
     //se a mensagem não for vazia executa a leitura
     //while(recvfrom(sockfd, (*msg)._payload, 8, 0, (struct sockaddr *) &addr, &addr_size)<8);
     //msg->_payload = (char*) malloc((msg->length)*sizeof(char));
-    	while(read(sockfd,msg,8) < 0)
-    	;
+    	while(recvfrom(sockfd, msg, 8, 0, (struct sockaddr *) &addr, &addr_size) < 0);
 
     //msg->_payload[msg->length-1]='\0';
         if(msg->length != 0){
