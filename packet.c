@@ -40,6 +40,7 @@ void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* 
 	msg.timestamp = timestamp;
 
 	sendto(sockfd, &msg, sizeof(msg), 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+    sendto(sockfd, payload, strlen(payload), 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
     printf("%lu",sizeof(msg));
     printf("Message data %i, %i, %i, %i, %s.\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);;
 }
@@ -49,19 +50,19 @@ void recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
     int n;
     //espera terminar de ler do socket
     //se a mensagem não for vazia executa a leitura
-    while(read(sockfd,msg,8) < 0)
-    ;
     //while(recvfrom(sockfd, (*msg)._payload, 8, 0, (struct sockaddr *) &addr, &addr_size)<8);
-    msg->_payload = (char*) malloc((msg->length)*sizeof(char));
-    n = recvfrom(sockfd, (*msg)._payload, sizeof((*msg)._payload), 0, (struct sockaddr *) &addr, &addr_size);
-    msg->_payload[msg->length-1]='\0';
-        if(n == -1){
-            die("recvfrom()");
-            /*
+    //msg->_payload = (char*) malloc((msg->length)*sizeof(char));
+    	while(read(sockfd,msg,8) < 0)
+    	;
+
+    //msg->_payload[msg->length-1]='\0';
+        if(msg->length != 0){
+            //die("recvfrom()");
+            
             msg->_payload = (char*) malloc((msg->length)*sizeof(char));
-            n = recvfrom(sockfd, (*msg)._payload, sizeof((*msg)._payload), 0, (struct sockaddr *) &addr, &addr_size);
+            n = recvfrom(sockfd, msg->_payload, sizeof((*msg)._payload), 0, (struct sockaddr *) &addr, &addr_size);
             msg->_payload[msg->length-1]='\0';
-            */
+            
         }
         else{
             printf("cheguei aqui");

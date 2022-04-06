@@ -32,8 +32,11 @@ int main(int argc, char *argv[])
 	
 	while (1) {
 		/* receive from socket */
-        
-		recvprintpacket(sockfd, cli_addr);
+        n = recvfrom(sockfd, buf, 256, 0, (struct sockaddr *) &cli_addr, &clilen);
+		if (n < 0) 
+			printf("ERROR on recvfrom");
+		printf("Received a datagram: %s\n", buf);
+		//recvprintpacket(sockfd, cli_addr);
 		/* send to socket */
 		//n = sendto(sockfd, "Got your message\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
 		//if (n  < 0) 
