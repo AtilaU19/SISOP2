@@ -11,6 +11,7 @@
 #include "commons.h"
 #include "packet.c"
 #include "profile_notif.c"
+#include "filehandlers.c"
 
 #define PORT 4000
 #define SIGINT 2
@@ -145,7 +146,7 @@ void *clientmessagehandler(void *arg){
 	packet msg;
 	notification *notif;
 
-	printf("opened clientmessagehandler for user %s", list_of_profiles[userid].user_name);
+	//printf("opened clientmessagehandler for user %s", list_of_profiles[userid].user_name);
 
 	recvpacket(sockfd, &msg, cli_addr);
 
@@ -192,7 +193,7 @@ void *notificationhandler(void *arg){
 	notification *notif;
 	char* payload;
 
-	printf("opened notificationhandler for user %s", list_of_profiles[userid].user_name);
+	//printf("opened notificationhandler for user %s", list_of_profiles[userid].user_name);
 //using the same flag as other thread to maintain both synced up
 	while(par->flag){
 		//for each pending notification send message to user
@@ -249,7 +250,7 @@ void init_barriers(){		//inicializa barreiras
 int main(int argc, char *argv[])
 {
 	int one = 1;
-	int sockfd, i; 
+	int sockfd, i, userid; 
 	socklen_t clilen;
 	packet msg;
 	thread_parameters threadparams[CLIENTLIMIT];
@@ -257,7 +258,7 @@ int main(int argc, char *argv[])
 
 	//incialização das structs
 	init_profiles(list_of_profiles);
-//    read_profiles(list_of_profiles);
+    read_profiles(list_of_profiles);
     init_barriers();
 
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -287,10 +288,12 @@ int main(int argc, char *argv[])
 		if (msg.type != LOGUSER){
 			printf("[+] Data received: %i, %i, %i, %i, %s\n",msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
 			printf("User not logged in.");
-			exit(1);
 		}
 
-		if((pthread_create(&client_pthread[i], NULL, clientmessagehandler, &threadparams[i]) != 0 )){
+		userid = profile_handler(list_of_profiles, msg._payload, sockfd, ++seqncount);
+		free(msg._payload);
+		if(userid != -1){
+			if((pthread_create(&client_pthread[i], NULL, clientmessagehandler, &threadparams[i]) != 0 )){
 			printf("Client message handler thread did not open succesfully.\n");
 		}
 		
@@ -298,6 +301,8 @@ int main(int argc, char *argv[])
 			printf("Notification handler thread did not open succesfully.\n");
 		}
 		i+=2;
+		}
+		
 	}
 	
 	close(sockfd);
