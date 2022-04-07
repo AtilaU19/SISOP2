@@ -31,7 +31,7 @@ int getcurrenttime(){
 	return hr*100+min;
 }
 //TEM QUE IMPLEMENTAR AINDA
-void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* payload, struct sockaddr_in serv_addr){
+void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* payload, struct sockaddr_in addr){
     
     packet msg;
 	msg.type = action;
@@ -39,13 +39,13 @@ void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* 
 	msg.length = len;
 	msg.timestamp = timestamp;
 
-	sendto(sockfd, &msg, sizeof(msg), 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
-    sendto(sockfd, payload, strlen(payload), 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
-    printf("%lu",sizeof(msg));
-    printf("Message data %i, %i, %i, %i, %s.\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);;
+	sendto(sockfd, &msg, sizeof(msg), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
+    sendto(sockfd, payload, strlen(payload), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
+    //printf("%lu",sizeof(msg));
+    printf("Sent message: %i, %i, %i, %i, %s.\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);;
 }
 // só recebe o packet, chamado pelo recvprintpacket
-void recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
+struct sockaddr_in recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
     socklen_t addr_size = sizeof(struct sockaddr_in);
     int n;
     //espera terminar de ler do socket
@@ -67,9 +67,9 @@ void recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
             printf("cheguei aqui");
             //msg->_payload=NULL;
         }
-        
-        printf("[+] Data received: %i, %i, %i, %i, %s\n",msg->type, msg->seqn, msg->length, msg->timestamp, msg->_payload);
-
+        //printf("ADDRESS IN RECVPACKET %s\n", addr);
+        printf("[+] Received message: %i, %i, %i, %i, %s\n",msg->type, msg->seqn, msg->length, msg->timestamp, msg->_payload);
+        return (addr);
 }
 //pega o packet recebido do recvpacket e printa caso tenha algum conteúdo
 void recvprintpacket(int sockfd, struct sockaddr_in addr){

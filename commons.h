@@ -7,6 +7,7 @@
 #define FOLLOW 3
 #define NOTIFICATION 4
 #define LOGUSER 5
+#define CHANGEPORT 6
 #define CLIENTLIMIT 500
 #define NOTIFLIMIT 500
 #define FOLLOWLIMIT 500

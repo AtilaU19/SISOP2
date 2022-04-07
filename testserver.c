@@ -38,9 +38,9 @@ int main(int argc, char *argv[])
 		printf("Received a datagram: %s\n", buf);
 		//recvprintpacket(sockfd, cli_addr);
 		/* send to socket */
-		//n = sendto(sockfd, "Got your message\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-		//if (n  < 0) 
-		//	printf("ERROR on sendto");
+		n = sendto(sockfd, "Got your message\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
+		if (n  < 0) 
+			printf("ERROR on sendto");
 	}
 	
 	close(sockfd);

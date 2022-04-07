@@ -13,14 +13,26 @@
 #include "profile_notif.c"
 #include "filehandlers.c"
 
-#define PORT 4000
+#define LOGINPORT 4000
+#define COMMPORT 10000
 #define SIGINT 2
-int sockfd, n, seqncount;	
-struct sockaddr_in serv_addr, cli_addr;
+typedef struct thread_parameters{ 
+	int sockfd;
+	int flag;
+	int userid;
+	struct sockaddr_in cli_addr;
+
+}thread_parameters;
+
+int n, seqncount, i = 1;	
+struct sockaddr_in serv_addr;
+packet msg;
+
+thread_parameters threadparams[CLIENTLIMIT];
+pthread_t client_pthread[2*CLIENTLIMIT];
 
 pthread_mutex_t send_mutex =  PTHREAD_MUTEX_INITIALIZER; 
 pthread_mutex_t follow_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 //barreira do consumidor//
 pthread_barrier_t  barriers[CLIENTLIMIT];
 
@@ -28,16 +40,11 @@ pthread_barrier_t  barriers[CLIENTLIMIT];
 profile list_of_profiles[CLIENTLIMIT];
 
 
-typedef struct thread_parameters{ 
-	int sockfd;
-	int flag;
-	int userid;
 
-}thread_parameters;
 
 //ctrl c handle
 void signalHandler(int signal) {
-   close(sockfd);   
+//   close(sockfd);   
 //   save_profiles(list_of_profiles);
    printf("\nServer ended successfully\n");
    exit(0);
@@ -141,34 +148,33 @@ void sendhandler(notification *notif, packet msg, int userid, int sockfd){
 void *clientmessagehandler(void *arg){
 	thread_parameters *par = (thread_parameters*) arg;
 	int userid = par->userid;
-	int sockfd = par->sockfd;
 	char newfollow[21];
 	packet msg;
 	notification *notif;
 
 	//printf("opened clientmessagehandler for user %s", list_of_profiles[userid].user_name);
 
-	recvpacket(sockfd, &msg, cli_addr);
+	par->cli_addr = recvpacket(par->sockfd, &msg, par->cli_addr);
 
 	while(par->flag){
 		switch(msg.type){
 			case QUIT:
 				list_of_profiles[userid].online_sessions -=1;		//remove usuário da lista de sessões abertas
             	pthread_barrier_init (&barriers[userid], NULL, list_of_profiles[userid].online_sessions);		//remove sessão das barriers, evita que um client espere por outro do mesmo usuário que já fechou
-				close(sockfd);
+				close(par->sockfd);
 				par->flag = 0;
 				break;
 			
 			case SEND:
 				pthread_mutex_lock(&send_mutex);
-				sendhandler(notif, msg, userid, sockfd);
+				sendhandler(notif, msg, userid, par->sockfd);
 				pthread_mutex_unlock(&send_mutex);
 				break;
 			
 			case FOLLOW:
 				pthread_mutex_lock(&follow_mutex);
 				strcpy(newfollow, msg._payload);
-				followhandler(newfollow, userid, sockfd);
+				followhandler(newfollow, userid, par->sockfd);
 				pthread_mutex_unlock(&follow_mutex);
 				break;
 			
@@ -204,10 +210,11 @@ void *notificationhandler(void *arg){
 				//gets notification 
 				notif = list_of_profiles[notifid.userid_notif].list_send_not[notifid.id_notif];
 				payload = malloc(notif->length+strlen(notif->sender) + 12*sizeof(char));
+				sprintf(payload,"[%.0i:%02d] %s - %s\n", notif->timestamp/100, notif->timestamp%100, notif->sender, notif->_string);
 				//talvez o sprintf seja necessário pra colocar o valor na payload mas vamo ver
 
 				//sends notification
-				sendpacket(sockfd, NOTIFICATION, ++seqncount, sizeof(payload), getcurrenttime(),  payload, cli_addr);
+				sendpacket(sockfd, NOTIFICATION, ++seqncount, sizeof(payload), getcurrenttime(),  payload, par->cli_addr);
 				free(payload);
 
 				//barrerira para usuário com mais de um client
@@ -247,14 +254,61 @@ void init_barriers(){		//inicializa barreiras
    }
 }
 
+void login_handler(int userid, int sockfd,  struct sockaddr_in cli_addr){
+	char buffer[BUFFER_SIZE];
+	int newsocket, juan = 1; 
+	struct sockaddr_in newcli_addr;
+			if(userid != -1){
+
+			sprintf(buffer,"%i", COMMPORT+i);
+			printf("New port for user %s: %s\n",list_of_profiles[userid].user_name,buffer);
+			sendpacket(sockfd, CHANGEPORT, seqncount++, strlen(buffer), getcurrenttime(), buffer, cli_addr);
+				
+				if ((newsocket = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+					printf("ERROR opening socket");
+				}
+				bzero((char *) &newcli_addr, sizeof(newcli_addr));
+				newcli_addr.sin_family = AF_INET;
+				newcli_addr.sin_addr.s_addr = INADDR_ANY;    
+				newcli_addr.sin_port = htons(COMMPORT+i);
+
+				if ((setsockopt(newsocket, SOL_SOCKET, SO_REUSEADDR, &juan, sizeof(juan)) == -1)){
+					printf("Failed setsockopt.");
+					exit(1);
+				}
+
+				if (bind(newsocket, (struct sockaddr *) &newcli_addr, sizeof(struct sockaddr)) < 0) 
+					printf("ERROR on binding");
+				
+				printf("DEBUG: Old socket: %i New socket: %i", sockfd, newsocket);
+				
+				threadparams[i].userid = userid;
+				threadparams[i].sockfd = newsocket;
+				threadparams[i].flag = 1;
+				threadparams[i].cli_addr = newcli_addr;
+				
+
+				if((pthread_create(&client_pthread[i], NULL, clientmessagehandler, &threadparams[i]) != 0 )){
+					printf("Client message handler thread did not open succesfully.\n");
+				}
+				
+				if((pthread_create(&client_pthread[i+1], NULL, notificationhandler, &threadparams[i]) != 0 )){
+					printf("Notification handler thread did not open succesfully.\n");
+				}
+				//PROVAVELMENTE DEVERIA HAVER ALGUMA SINCRONIZAÇÃO COM O VALOR DESSE I ENTRE THREADS.
+				i+=2;
+			}
+			
+		//exit(1);
+}
+
 int main(int argc, char *argv[])
 {
 	int one = 1;
-	int sockfd, i, userid; 
+	int userid, sockfd;
 	socklen_t clilen;
-	packet msg;
-	thread_parameters threadparams[CLIENTLIMIT];
-	pthread_t client_pthread[2*CLIENTLIMIT];
+	struct sockaddr_in cli_addr;
+
 
 	//incialização das structs
 	init_profiles(list_of_profiles);
@@ -267,7 +321,7 @@ int main(int argc, char *argv[])
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;    
-	serv_addr.sin_port = htons(PORT);
+	serv_addr.sin_port = htons(LOGINPORT);
 
 	if ((setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1)){
 		printf("Failed setsockopt.");
@@ -279,32 +333,46 @@ int main(int argc, char *argv[])
 
 	clilen = sizeof(struct sockaddr_in);
 
-	printf("Server initialized");
+	printf("Server initialized\n");
 	
 	while (1) {
 		signal(SIGINT, signalHandler);
 		/* receive from socket */
-		recvpacket(sockfd, &msg, cli_addr);
-		if (msg.type != LOGUSER){
-			printf("[+] Data received: %i, %i, %i, %i, %s\n",msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
-			printf("User not logged in.");
+		cli_addr = recvpacket(sockfd, &msg, cli_addr);
+/*
+//o problema geral é que o recvpacket não atualiza o valor de CLI_ADDR
+//só a primitiva recvfrom
+//então quando a gente chama ele o endereço recebido não vai pra lugar nenhum
+		while(recvfrom(sockfd, &msg, 8, 0, (struct sockaddr *) &cli_addr, &clilen) < 0);
+
+    //msg->_payload[msg->length-1]='\0';
+        if(msg.length != 0){
+            //die("recvfrom()");
+            
+            msg._payload = (char*) malloc((msg.length)*sizeof(char));
+            n = recvfrom(sockfd, msg._payload, sizeof(msg._payload), 0, (struct sockaddr *)  &cli_addr, &clilen);
+            msg._payload[msg.length-1]='\0';
+            
+        }
+
+*/
+
+
+
+		//printf("ADDRESS OUT OF RECVPACKET %s\n", addr);
+		if (msg.type == LOGUSER){
+			userid = profile_handler(list_of_profiles, msg._payload, sockfd, ++seqncount);
+			free(msg._payload);
+			printf("DEBUG: ID DO USER %i \n", userid);
+
+			login_handler(userid, sockfd, cli_addr);
+		}
+		else{
+			printf("[+] Received this instead of login packet: %i, %i, %i, %i, %s\n",msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
+			printf("User not logged in.\n");
 		}
 
-		userid = profile_handler(list_of_profiles, msg._payload, sockfd, ++seqncount);
-		free(msg._payload);
-		if(userid != -1){
-			if((pthread_create(&client_pthread[i], NULL, clientmessagehandler, &threadparams[i]) != 0 )){
-			printf("Client message handler thread did not open succesfully.\n");
-		}
-		
-		if((pthread_create(&client_pthread[i+1], NULL, notificationhandler, &threadparams[i]) != 0 )){
-			printf("Notification handler thread did not open succesfully.\n");
-		}
-		i+=2;
-		}
-		
-	}
-	
+	}	
 	close(sockfd);
 	return 0;
 }

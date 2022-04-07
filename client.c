@@ -13,7 +13,8 @@
 
 int sockfd;
 int seqncnt = 0;
-struct sockaddr_in serv_addr;
+struct hostent *server;
+struct sockaddr_in serv_addr, cli_addr;
 
 int getaction(char* buffer){
 	if(!strncmp(buffer, "SEND ", 5))
@@ -38,11 +39,13 @@ void closeSession(){
 //should be called in a separate thread 
 //as to not conflict with receiving messages
 void *sendmessage(void *arg){
-	int n, flag, action, sockfd = *(int *) arg; 
+	int n, flag, action; 
+	int sockfd = *(int *) arg; 
 	char buffer[BUFFER_SIZE];
 
 	while(TRUE)
 	{
+		printf("Estou no send message e o socket é %i\n", sockfd);
 		//clears buffer
 		bzero(buffer, BUFFER_SIZE);
 		if(!fgets(buffer, BUFFER_SIZE, stdin))
@@ -71,12 +74,29 @@ void *sendmessage(void *arg){
 	}
 }
 
+int change_port(char* newport, int oldsockfd){
+	int newsockfd, newportint= atoi(newport);
+	close(oldsockfd);
+	printf("IMHERE");
+	if ((newsockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		printf("ERROR opening socket");
+	
+	serv_addr.sin_family = AF_INET;     
+	serv_addr.sin_port = htons(newportint);    
+	serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
+	bzero(&(serv_addr.sin_zero), 8);
+
+	return newsockfd;
+
+}
+
 void *receivemessage(void *arg){
 	int sockfd = *(int *) arg;
 	packet msg;
 
 	while(TRUE){
-		recvpacket(sockfd, &msg, serv_addr);
+		printf("Estou no receive package e o socket é %i\n", sockfd);
+		cli_addr = recvpacket(sockfd, &msg, cli_addr);
 		switch(msg.type){
 			case FOLLOW:
 				printf("%s\n", msg._payload);
@@ -85,10 +105,13 @@ void *receivemessage(void *arg){
 				printf("%s\n", msg._payload);
 				break;
 			case QUIT:
-				printf ("Limite de sessões simultâneas excedido.");
+				printf ("Simultaneous session limit exceeded.");
 				close (sockfd);
 				exit(1);
 				break;
+			case CHANGEPORT:
+				printf ("Server accepted login attempt, changing port");
+				sockfd = change_port(msg._payload, sockfd);
 			default:
 				printf ("Unknown message error");
 				break;
@@ -96,7 +119,6 @@ void *receivemessage(void *arg){
 		free(msg._payload);
 	}
 }
-
 
 
 void validateuserhandle(char *handle){
@@ -123,7 +145,6 @@ int main(int argc, char *argv[])
     int n, port;
 	unsigned int length;
 	char handle[20];
-	struct hostent *server;
 
 	if (argc < 4) {
 		fprintf(stderr, "usage ./app_cliente <@profile> <server_address> <port> \n");
@@ -141,7 +162,7 @@ int main(int argc, char *argv[])
 
 	strcpy(handle, argv[1]);	
 	validateuserhandle(handle);
-	printf("User handle: %s , Port: %d\nUse SEND to send a message to all followers.\nUse FOLLOW <@handle> to follow another user.",handle, port);
+	printf("User handle: %s , Port: %d\nUse SEND to send a message to all followers.\nUse FOLLOW <@handle> to follow another user.\n\n",handle, port);
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
