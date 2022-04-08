@@ -46,7 +46,7 @@ profile list_of_profiles[CLIENTLIMIT];
 void signalHandler(int signal) {
 //   close(sockfd);   
 //   save_profiles(list_of_profiles);
-   printf("\nServer ended successfully\n");
+   printf("\n***** SERVER ENDED *****\n");
    exit(0);
 }
 
@@ -79,7 +79,7 @@ int is_follow_valid(int followid,int userid, char *user_name, int sockfd){
 void followhandler(char *user_name, int userid, int sockfd){
    int followid;
    int followercount;
-   char* loggedusername = list_of_profiles[userid].user_name;
+   //char* loggedusername = list_of_profiles[userid].user_name;
 
    followid = get_profile_id(list_of_profiles,user_name);
 
@@ -98,7 +98,7 @@ void followhandler(char *user_name, int userid, int sockfd){
    list_of_profiles[followid].follower_count++;
    list_of_profiles[followid].followed_users[followercount] =  &list_of_profiles[followid];
 
-   printf("User %s just followed %s ", user_name, loggedusername);
+   //printf("User %s just followed %s ", user_name, loggedusername);
  
 }
 
@@ -112,9 +112,8 @@ void sendhandler(notification *notif, packet msg, int userid, int sockfd){
    //Update notif id
    id_notif = list_of_profiles[userid].sent_notif_count;
    list_of_profiles[userid].sent_notif_count++;
-
    //Create notification
-   notif = malloc(sizeof(&notif));
+   notif = malloc(sizeof(notification));
    notif->id = id_notif;
    notif->sender = list_of_profiles[userid].user_name;
    notif->timestamp = msg.timestamp;
@@ -152,11 +151,14 @@ void *clientmessagehandler(void *arg){
 	packet msg;
 	notification *notif;
 
-	//printf("opened clientmessagehandler for user %s", list_of_profiles[userid].user_name);
+	printf("opened clientmessagehandler for user %s\n", list_of_profiles[userid].user_name);
 
-	par->cli_addr = recvpacket(par->sockfd, &msg, par->cli_addr);
 
+	
 	while(par->flag){
+		par->cli_addr = recvpacket(par->sockfd, &msg, par->cli_addr);
+		//printf("estourou depois do recvpacket\n");
+
 		switch(msg.type){
 			case QUIT:
 				list_of_profiles[userid].online_sessions -=1;		//remove usuário da lista de sessões abertas
@@ -170,14 +172,14 @@ void *clientmessagehandler(void *arg){
 				sendhandler(notif, msg, userid, par->sockfd);
 				pthread_mutex_unlock(&send_mutex);
 				break;
-			
+				//SEND GERA CORRUPTED TOP SIZE não é problema nos mutex já testei
 			case FOLLOW:
 				pthread_mutex_lock(&follow_mutex);
 				strcpy(newfollow, msg._payload);
 				followhandler(newfollow, userid, par->sockfd);
 				pthread_mutex_unlock(&follow_mutex);
 				break;
-			
+			//FOLLOW GERA DOUBLE FREE DETECTED IN TCACHE2
 			default:
 				printf("Unknown message type received.");
 				exit(1);
@@ -262,7 +264,7 @@ void login_handler(int userid, int sockfd,  struct sockaddr_in cli_addr){
 
 			sprintf(buffer,"%i", COMMPORT+i);
 			printf("New port for user %s: %s\n",list_of_profiles[userid].user_name,buffer);
-			sendpacket(sockfd, CHANGEPORT, seqncount++, strlen(buffer), getcurrenttime(), buffer, cli_addr);
+			sendpacket(sockfd, CHANGEPORT, seqncount++, strlen(buffer)+1, getcurrenttime(), buffer, cli_addr);
 				
 				if ((newsocket = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
 					printf("ERROR opening socket");
@@ -280,7 +282,7 @@ void login_handler(int userid, int sockfd,  struct sockaddr_in cli_addr){
 				if (bind(newsocket, (struct sockaddr *) &newcli_addr, sizeof(struct sockaddr)) < 0) 
 					printf("ERROR on binding");
 				
-				printf("DEBUG: Old socket: %i New socket: %i", sockfd, newsocket);
+				printf("DEBUG: Old socket: %i New socket: %i\n", sockfd, newsocket);
 				
 				threadparams[i].userid = userid;
 				threadparams[i].sockfd = newsocket;
@@ -295,8 +297,9 @@ void login_handler(int userid, int sockfd,  struct sockaddr_in cli_addr){
 				if((pthread_create(&client_pthread[i+1], NULL, notificationhandler, &threadparams[i]) != 0 )){
 					printf("Notification handler thread did not open succesfully.\n");
 				}
-				//PROVAVELMENTE DEVERIA HAVER ALGUMA SINCRONIZAÇÃO COM O VALOR DESSE I ENTRE THREADS.
+				
 				i+=2;
+
 			}
 			
 		//exit(1);
@@ -333,7 +336,7 @@ int main(int argc, char *argv[])
 
 	clilen = sizeof(struct sockaddr_in);
 
-	printf("Server initialized\n");
+	printf("***** SERVER INITIALIZED *****\n");
 	
 	while (1) {
 		signal(SIGINT, signalHandler);

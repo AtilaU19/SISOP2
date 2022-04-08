@@ -11,7 +11,7 @@
 #include "commons.h"
 #include "packet.c"
 
-int sockfd;
+int port;
 int seqncnt = 0;
 struct hostent *server;
 struct sockaddr_in serv_addr, cli_addr;
@@ -28,7 +28,7 @@ int getaction(char* buffer){
 }
 
 //fecha a session quando der ctrl c no terminal
-void closeSession(){
+void closeSession(int sockfd){
 	sendpacket(sockfd,QUIT,++seqncnt,0,0,"", serv_addr);
     close(sockfd);
     system("clear"); 
@@ -55,7 +55,7 @@ void *sendmessage(void *arg){
 		switch(action){
 			case QUIT:
 			//isso aqui vai ser o handle de sair da sessão
-				closeSession;
+				closeSession(sockfd);
 				break;
 			case SEND:
 				if (strlen(buffer) > 134){
@@ -77,7 +77,7 @@ void *sendmessage(void *arg){
 int change_port(char* newport, int oldsockfd){
 	int newsockfd, newportint= atoi(newport);
 	close(oldsockfd);
-	printf("IMHERE");
+	printf("Changing port from %i to %s\n", port, newport);
 	if ((newsockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
 	
@@ -95,7 +95,7 @@ void *receivemessage(void *arg){
 	packet msg;
 
 	while(TRUE){
-		printf("Estou no receive package e o socket é %i\n", sockfd);
+		//printf("Estou no receive package e o socket é %i\n", sockfd);
 		cli_addr = recvpacket(sockfd, &msg, cli_addr);
 		switch(msg.type){
 			case FOLLOW:
@@ -110,8 +110,9 @@ void *receivemessage(void *arg){
 				exit(1);
 				break;
 			case CHANGEPORT:
-				printf ("Server accepted login attempt, changing port");
+				printf ("Server accepted login attempt, changing port\n");
 				sockfd = change_port(msg._payload, sockfd);
+				break;
 			default:
 				printf ("Unknown message error");
 				break;
@@ -135,14 +136,11 @@ void validateuserhandle(char *handle){
 
 
 
-void sendhandletoserver(char *handle){
-	sendpacket(sockfd, LOGUSER, ++seqncnt, strlen(handle)+1, getcurrenttime(), handle, serv_addr);
-}
 int main(int argc, char *argv[])
 {
 	pthread_t thr_client_input, thr_client_display;
 	
-    int n, port;
+    int n, sockfd;
 	unsigned int length;
 	char handle[20];
 
@@ -172,7 +170,7 @@ int main(int argc, char *argv[])
 	serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
 	bzero(&(serv_addr.sin_zero), 8);  
 
-	sendhandletoserver(handle);
+	sendpacket(sockfd, LOGUSER, ++seqncnt, strlen(handle)+1, getcurrenttime(), handle, serv_addr);
 
 
 //Começa uma thread para receber mensagens e outra para enviar

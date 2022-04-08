@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include "packet.c"
 
 #define PORT 4000
 
@@ -16,6 +17,8 @@ int main(int argc, char *argv[])
 	unsigned int length;
 	struct sockaddr_in serv_addr, from;
 	struct hostent *server;
+	char* handle = "@test";
+	packet msg;
 	
 	char buffer[256];
 	if (argc < 2) {
@@ -38,9 +41,14 @@ int main(int argc, char *argv[])
 	serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
 	bzero(&(serv_addr.sin_zero), 8);  
 
+	sendpacket(sockfd, 5, 1, strlen(handle)+1, 2020, handle, serv_addr);
+
+	recvpacket(sockfd, &msg, from);
+
 	printf("Enter the message: ");
 	bzero(buffer, 256);
 	fgets(buffer, 256, stdin);
+
 
 	n = sendto(sockfd, buffer, strlen(buffer), 0, (const struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
 	if (n < 0) 
