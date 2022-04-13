@@ -79,11 +79,14 @@ int is_follow_valid(int followid,int userid, char *user_name, int sockfd){
 void followhandler(char *user_name, int userid, int sockfd){
    int followid;
    int followercount;
-   //char* loggedusername = list_of_profiles[userid].user_name;
+   //
+   char* loggedusername = list_of_profiles[userid].user_name;
 
+
+	//pega o usuario que está sendo seguido
    followid = get_profile_id(list_of_profiles,user_name);
 
-   //check if follower exists and is not already followed/is not the user
+   //check if followed exists and is not already followed/is not the user
    if(!is_follow_valid(followid,userid,user_name,sockfd))
       return;
   
@@ -93,13 +96,13 @@ void followhandler(char *user_name, int userid, int sockfd){
 	   printf("User has reached max followers and could not follow %s", user_name);
 	   exit(1);
    }
-    
+    printf("User %s just followed %s \n", loggedusername, user_name);
    //ADD FOLLOWER
    list_of_profiles[followid].follower_count++;
-   list_of_profiles[followid].followed_users[followercount] =  &list_of_profiles[followid];
+   list_of_profiles[followid].followed_users[followercount] =  &list_of_profiles[userid];
+//isso aqui ta ao contrario
 
-   //printf("User %s just followed %s ", user_name, loggedusername);
- 
+	return;
 }
 
 void sendhandler(notification *notif, packet msg, int userid, int sockfd){
@@ -109,6 +112,7 @@ void sendhandler(notification *notif, packet msg, int userid, int sockfd){
    int num_followers = list_of_profiles[userid].follower_count;
    int id_notif;
    
+
    //Update notif id
    id_notif = list_of_profiles[userid].sent_notif_count;
    list_of_profiles[userid].sent_notif_count++;
@@ -122,10 +126,12 @@ void sendhandler(notification *notif, packet msg, int userid, int sockfd){
    notif->length = msg.length;
    notif->pending = list_of_profiles[userid].follower_count;
 
+   //printf("Payload da notificação = %s\n", notif->_string);
+
    //Putting the notification on the current profile as send
    list_of_profiles[userid].list_send_not[id_notif] = notif;
 
-   //Putting the notification of followers pending list
+   //Putting the notification on followers pending list
    for(int i=0; i< num_followers;i++){
 
       p = list_of_profiles[userid].followed_users[i];
@@ -212,18 +218,26 @@ void *notificationhandler(void *arg){
 				//gets notification 
 				notif = list_of_profiles[notifid.userid_notif].list_send_not[notifid.id_notif];
 				payload = malloc(notif->length+strlen(notif->sender) + 12*sizeof(char));
-				sprintf(payload,"[%.0i:%02d] %s - %s\n", notif->timestamp/100, notif->timestamp%100, notif->sender, notif->_string);
+				sprintf(payload,"[%.0i:%02d] %s - %s", notif->timestamp/100, notif->timestamp%100, notif->sender, notif->_string);
 				//talvez o sprintf seja necessário pra colocar o valor na payload mas vamo ver
-
+				printf("Payload = %s\n", payload);
 				//sends notification
 				sendpacket(sockfd, NOTIFICATION, ++seqncount, sizeof(payload), getcurrenttime(),  payload, par->cli_addr);
-				free(payload);
+				if(payload){
+					free(payload);
+				}
+
+
+				//DOIS ERROS ACONTECENDO:
+				//A mensagem está sendo enviada para o seguido, não para o seguidor. --RESOLVIDO
+				//O erro de floating point é decorrente das barriers ou do mutex, não sei qual ainda
+				//Além disso o conteúdo da mensagem tá só com o horário, sem o sender ou o conteúdo de fato PROVAVELMENTE PARA DE LER NO CLIENT QUANDO VE O ESPAÇO
 
 				//barrerira para usuário com mais de um client
-				pthread_barrier_wait (&barriers[userid]);
+				//pthread_barrier_wait (&barriers[userid]);
 
 				//locks mutex to change list of notifications without having other thread take from it at the same time
-				pthread_mutex_lock(&send_mutex);
+				//pthread_mutex_lock(&send_mutex);
 
 				if(par->flag){
 					//see if notification has not been deleted by another client of same user
@@ -240,8 +254,9 @@ void *notificationhandler(void *arg){
 						user->list_pending_not[i].id_notif = -1;
 					}
 				}
+				
 				//unlocks thread after removing notification from list, avoids conflicts between threads
-				pthread_mutex_unlock(&send_mutex);
+				//pthread_mutex_unlock(&send_mutex);
 
 			}
 		}

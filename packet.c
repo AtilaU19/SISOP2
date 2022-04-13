@@ -30,7 +30,7 @@ int getcurrenttime(){
 
 	return hr*100+min;
 }
-//TEM QUE IMPLEMENTAR AINDA
+//Envia packet para endereço addr no socket sockfd
 void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* payload, struct sockaddr_in addr){
     
     packet msg;
@@ -42,7 +42,7 @@ void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* 
 	sendto(sockfd, &msg, sizeof(msg), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
     sendto(sockfd, payload, strlen(payload), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
     //printf("%lu",sizeof(msg));
-    printf("Sent message: %i, %i, %i, %i, %s.\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);;
+    printf("Sent message: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);;
 }
 // só recebe o packet, chamado pelo recvprintpacket
 struct sockaddr_in recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
@@ -64,7 +64,7 @@ struct sockaddr_in recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
             
         }
         else{
-            printf("cheguei aqui");
+            printf("Empty message");
             //msg->_payload=NULL;
         }
         //printf("ADDRESS IN RECVPACKET %s\n", addr);
