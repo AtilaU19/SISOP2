@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <signal.h>
 #include <pthread.h>
+#include <arpa/inet.h>
 #include "commons.h"
 #include "packet.c"
 #include "profile_notif.c"
@@ -45,7 +46,7 @@ profile list_of_profiles[CLIENTLIMIT];
 //ctrl c handle
 void signalHandler(int signal) {
 //   close(sockfd);   
-//   save_profiles(list_of_profiles);
+   save_profiles(list_of_profiles);
    printf("\n***** SERVER ENDED *****\n");
    exit(0);
 }
@@ -187,7 +188,8 @@ void *clientmessagehandler(void *arg){
 				break;
 			//FOLLOW GERA DOUBLE FREE DETECTED IN TCACHE2
 			default:
-				printf("Unknown message type received.");
+				printf("Unknown message type received.\n");
+				printf("Message data: %i, %i, %i, %i, %s\n",msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
 				exit(1);
 				break;
 		}
@@ -206,8 +208,9 @@ void *notificationhandler(void *arg){
 	profile *user = &list_of_profiles[userid];
 	notification *notif;
 	char payload[BUFFER_SIZE];
+	char buffer[INET_ADDRSTRLEN];
 
-	//printf("opened notificationhandler for user %s", list_of_profiles[userid].user_name);
+	printf("opened notificationhandler for user %s\n", list_of_profiles[userid].user_name);
 //using the same flag as other thread to maintain both synced up
 	while(par->flag){
 		//for each pending notification send message to user
@@ -218,12 +221,17 @@ void *notificationhandler(void *arg){
 				//gets notification 
 				notif = list_of_profiles[notifid.userid_notif].list_send_not[notifid.id_notif];
 				//payload = malloc(notif->length+strlen(notif->sender) + 12*sizeof(char));
-				//printf("[+] DEBUG server: sizeof payload for notification: %lu\n", sizeof(payload));
+				//printf("[+] DEBUG server > sizeof payload for notification: %lu\n", sizeof(payload));
 				sprintf(payload,"[%.0i:%02d] %s - %s", notif->timestamp/100, notif->timestamp%100, notif->sender, notif->_string);
 				//sprintf(payload,"%s - %s", notif->sender, notif->_string);
 				//talvez o sprintf seja necessário pra colocar o valor na payload mas vamo ver
 				printf("Payload = %s\n", payload);
 				//sends notification
+				
+				inet_ntop( AF_INET, &par->cli_addr.sin_addr, buffer, sizeof( buffer ));
+				printf("[+] DEBUG server > sockfd = %i, send address = %s\n", sockfd, buffer);
+				//TA PEGANDO O ENDEREÇO ERRADO QUANDO N TA FEITO O FOLLOW
+				
 				sendpacket(sockfd, NOTIFICATION, ++seqncount, strlen(payload)+1, getcurrenttime(), payload, par->cli_addr);
 				//if(payload){
 				//	free(payload);
@@ -232,8 +240,7 @@ void *notificationhandler(void *arg){
 				//DOIS ERROS ACONTECENDO:
 				//A mensagem está sendo enviada para o seguido, não para o seguidor. --RESOLVIDO
 				//O erro de floating point é decorrente das barriers ou do mutex, não sei qual ainda
-				//Além disso o conteúdo da mensagem tá só com o horário, sem o sender ou o conteúdo de fato 
-				//TA LENDO MENOS DO SOCKET DO QUE DEVERIA
+				//Além disso o conteúdo da mensagem tá só com o horário, sem o sender ou o conteúdo de fato --RESOLVIDO
 
 				//barrerira para usuário com mais de um client
 				//pthread_barrier_wait (&barriers[userid]);
@@ -277,12 +284,15 @@ void login_handler(int userid, int sockfd,  struct sockaddr_in cli_addr){
 	char buffer[BUFFER_SIZE];
 	int newsocket, juan = 1; 
 	struct sockaddr_in newcli_addr;
+	char debug[BUFFER_SIZE];
 			if(userid != -1){
 
-			sprintf(buffer,"%i", COMMPORT+i);
-			printf("New port for user %s: %s\n",list_of_profiles[userid].user_name,buffer);
-			sendpacket(sockfd, CHANGEPORT, seqncount++, strlen(buffer)+1, getcurrenttime(), buffer, cli_addr);
+				sprintf(buffer,"%i", COMMPORT+i);
+				printf("New port for user %s: %s\n",list_of_profiles[userid].user_name,buffer);
+				sendpacket(sockfd, CHANGEPORT, seqncount++, strlen(buffer)+1, getcurrenttime(), buffer, cli_addr);
+
 				
+
 				if ((newsocket = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
 					printf("ERROR opening socket");
 				}
@@ -300,12 +310,20 @@ void login_handler(int userid, int sockfd,  struct sockaddr_in cli_addr){
 					printf("ERROR on binding");
 				
 				//printf("DEBUG: Old socket: %i New socket: %i\n", sockfd, newsocket);
-				
+				/*
+				inet_ntop( AF_INET, &cli_addr.sin_addr, debug, sizeof( debug ));
+				printf("[+] DEBUG server > sockfd = %i, CLIENT address = %s\n", sockfd, debug);
+				*/
+				newcli_addr = recvpacket(newsocket, &msg, newcli_addr);
+				/*
+				inet_ntop( AF_INET, &newcli_addr.sin_addr, debug, sizeof( debug ));
+				printf("[+] DEBUG server > sockfd = %i, NEW address = %s\n", sockfd, debug);
+				*/
+
 				threadparams[i].userid = userid;
 				threadparams[i].sockfd = newsocket;
 				threadparams[i].flag = 1;
 				threadparams[i].cli_addr = newcli_addr;
-				
 
 				if((pthread_create(&client_pthread[i], NULL, clientmessagehandler, &threadparams[i]) != 0 )){
 					printf("Client message handler thread did not open succesfully.\n");
@@ -359,31 +377,11 @@ int main(int argc, char *argv[])
 		signal(SIGINT, signalHandler);
 		/* receive from socket */
 		cli_addr = recvpacket(sockfd, &msg, cli_addr);
-/*
-//o problema geral é que o recvpacket não atualiza o valor de CLI_ADDR
-//só a primitiva recvfrom
-//então quando a gente chama ele o endereço recebido não vai pra lugar nenhum
-		while(recvfrom(sockfd, &msg, 8, 0, (struct sockaddr *) &cli_addr, &clilen) < 0);
 
-    //msg->_payload[msg->length-1]='\0';
-        if(msg.length != 0){
-            //die("recvfrom()");
-            
-            msg._payload = (char*) malloc((msg.length)*sizeof(char));
-            n = recvfrom(sockfd, msg._payload, sizeof(msg._payload), 0, (struct sockaddr *)  &cli_addr, &clilen);
-            msg._payload[msg.length-1]='\0';
-            
-        }
-
-*/
-
-
-
-		//printf("ADDRESS OUT OF RECVPACKET %s\n", addr);
 		if (msg.type == LOGUSER){
 			userid = profile_handler(list_of_profiles, msg._payload, sockfd, ++seqncount);
 			free(msg._payload);
-			//printf("DEBUG: ID DO USER %i \n", userid);
+			//printf("[+] DEBUG server > ID DO USER %i \n", userid);
 
 			login_handler(userid, sockfd, cli_addr);
 		}

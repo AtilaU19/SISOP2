@@ -38,11 +38,11 @@ void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* 
 	msg.seqn = seqn;
 	msg.length = len;
 	msg.timestamp = timestamp;
-    //printf("[+] DEBUG packet: Sending payload %s\n", payload);
+    //printf("[+] DEBUG packet > Sending payload %s\n", payload);
 	sendto(sockfd, &msg, 8, 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
     sendto(sockfd, payload, strlen(payload), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
     //printf("%lu",sizeof(msg));
-    printf("Sent message: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);;
+    printf("[+] DEBUG packet > Sent message: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);;
 }
 // só recebe o packet, chamado pelo recvprintpacket
 struct sockaddr_in recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
@@ -66,7 +66,7 @@ struct sockaddr_in recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
     //msg->_payload[msg->length-1]='\0';
         if(msg->length != 0){
             //die("recvfrom()");
-            //printf("[+] DEBUG packet: received %s\n", msg->_payload);
+            //printf("[+] DEBUG packet > received %s\n", msg->_payload);
             msg->_payload = (char*) malloc((msg->length)*sizeof(char));
             n = recvfrom(sockfd, msg->_payload, msg->length /*+ strlen(msg->_payload)*/, 0, (struct sockaddr *) &addr, &addr_size);
             msg->_payload[msg->length-1]='\0';
@@ -77,7 +77,7 @@ struct sockaddr_in recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
             //msg->_payload=NULL;
         }
         //printf("ADDRESS IN RECVPACKET %s\n", addr);
-        printf("[+] Received message: %i, %i, %i, %i, %s\n",msg->type, msg->seqn, msg->length, msg->timestamp, msg->_payload);
+        printf("[+] DEBUG packet > Received message: %i, %i, %i, %i, %s\n",msg->type, msg->seqn, msg->length, msg->timestamp, msg->_payload);
         return (addr);
 }
 //pega o packet recebido do recvpacket e printa caso tenha algum conteúdo

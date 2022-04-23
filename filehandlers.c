@@ -4,8 +4,7 @@
 void save_profiles(profile list_of_profiles[CLIENTLIMIT])
 {
 	FILE *profiles, *followers;
-	int i, j;
-	i = 0;
+	int i = 0, j;
 
 	profiles = fopen("profiles.txt", "w");
 	followers = fopen("followers.txt", "w");
@@ -20,7 +19,6 @@ void save_profiles(profile list_of_profiles[CLIENTLIMIT])
 				fprintf(followers, "%i %s ", (int)strlen(list_of_profiles[i].followed_users[j]->user_name), list_of_profiles[i].followed_users[j]->user_name);
 				//printf("%i %s ", (int)strlen(profile_list[i].followers[j]->name), profile_list[i].followers[j]->name);
 			}
-			//printf("\n");
 		}
 		i++;
 	}

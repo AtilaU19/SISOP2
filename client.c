@@ -92,12 +92,13 @@ int change_port(char* newport, int oldsockfd){
 
 void *receivemessage(void *arg){
 	int sockfd = *(int *) arg;
+	char* acknowledge = "ack";
 	packet msg;
 
 	while(TRUE){
 		//printf("Estou no receive package e o socket é %i\n", sockfd);
 		cli_addr = recvpacket(sockfd, &msg, cli_addr);
-		//printf("[+] DEBUG client : received %s\n", msg._payload);
+		//printf("[+] DEBUG client > received %s\n", msg._payload);
 		switch(msg.type){
 			case FOLLOW:
 				printf("%s\n", msg._payload);
@@ -113,6 +114,7 @@ void *receivemessage(void *arg){
 			case CHANGEPORT:
 				printf ("Server accepted login attempt, changing port\n");
 				sockfd = change_port(msg._payload, sockfd);
+				sendpacket(sockfd, ACK, seqncnt++, strlen(acknowledge), getcurrenttime(), acknowledge,  serv_addr);
 				break;
 			default:
 				printf ("Unknown message error");
