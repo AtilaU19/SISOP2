@@ -7,14 +7,23 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
 #include <pthread.h>
 #include "commons.h"
 #include "packet.c"
 
 int port;
 int seqncnt = 0;
+int sockfd; 
 struct hostent *server;
 struct sockaddr_in serv_addr, cli_addr;
+
+void signal_handler (int signal) {
+	sendpacket(sockfd, QUIT, seqncnt++, 0, getcurrenttime(), "", serv_addr );
+	close(sockfd);
+	printf("Sessão encerrada\n");
+	exit(1);
+}
 
 int getaction(char* buffer){
 	if(!strncmp(buffer, "SEND ", 5))
@@ -42,6 +51,8 @@ void *sendmessage(void *arg){
 	int n, flag, action; 
 	int sockfd = *(int *) arg; 
 	char buffer[BUFFER_SIZE];
+
+
 
 	while(TRUE)
 	{
@@ -91,9 +102,11 @@ int change_port(char* newport, int oldsockfd){
 }
 
 void *receivemessage(void *arg){
-	int sockfd = *(int *) arg;
+	//int sockfd = *(int *) arg;
 	char* acknowledge = "ack";
 	packet msg;
+
+	signal(SIGINT, signal_handler);
 
 	while(TRUE){
 		//printf("Estou no receive package e o socket é %i\n", sockfd);
@@ -143,7 +156,7 @@ int main(int argc, char *argv[])
 {
 	pthread_t thr_client_input, thr_client_display;
 	
-    int n, sockfd;
+    int n;
 	unsigned int length;
 	char handle[20];
 

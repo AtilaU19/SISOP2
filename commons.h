@@ -9,6 +9,7 @@
 #define LOGUSER 5
 #define CHANGEPORT 6
 #define ACK 7
+#define SIGINT 2
 #define CLIENTLIMIT 500
 #define NOTIFLIMIT 500
 #define FOLLOWLIMIT 500
