@@ -205,7 +205,7 @@ void *notificationhandler(void *arg){
 	ids_notification notifid;
 	profile *user = &list_of_profiles[userid];
 	notification *notif;
-	char* payload;
+	char payload[BUFFER_SIZE];
 
 	//printf("opened notificationhandler for user %s", list_of_profiles[userid].user_name);
 //using the same flag as other thread to maintain both synced up
@@ -217,21 +217,23 @@ void *notificationhandler(void *arg){
 			if (notifid.userid_notif != -1){
 				//gets notification 
 				notif = list_of_profiles[notifid.userid_notif].list_send_not[notifid.id_notif];
-				payload = malloc(notif->length+strlen(notif->sender) + 12*sizeof(char));
+				//payload = malloc(notif->length+strlen(notif->sender) + 12*sizeof(char));
+				//printf("[+] DEBUG server: sizeof payload for notification: %lu\n", sizeof(payload));
 				sprintf(payload,"[%.0i:%02d] %s - %s", notif->timestamp/100, notif->timestamp%100, notif->sender, notif->_string);
+				//sprintf(payload,"%s - %s", notif->sender, notif->_string);
 				//talvez o sprintf seja necessário pra colocar o valor na payload mas vamo ver
 				printf("Payload = %s\n", payload);
 				//sends notification
-				sendpacket(sockfd, NOTIFICATION, ++seqncount, sizeof(payload), getcurrenttime(),  payload, par->cli_addr);
-				if(payload){
-					free(payload);
-				}
-
+				sendpacket(sockfd, NOTIFICATION, ++seqncount, strlen(payload)+1, getcurrenttime(), payload, par->cli_addr);
+				//if(payload){
+				//	free(payload);
+				//}
 
 				//DOIS ERROS ACONTECENDO:
 				//A mensagem está sendo enviada para o seguido, não para o seguidor. --RESOLVIDO
 				//O erro de floating point é decorrente das barriers ou do mutex, não sei qual ainda
-				//Além disso o conteúdo da mensagem tá só com o horário, sem o sender ou o conteúdo de fato PROVAVELMENTE PARA DE LER NO CLIENT QUANDO VE O ESPAÇO
+				//Além disso o conteúdo da mensagem tá só com o horário, sem o sender ou o conteúdo de fato 
+				//TA LENDO MENOS DO SOCKET DO QUE DEVERIA
 
 				//barrerira para usuário com mais de um client
 				//pthread_barrier_wait (&barriers[userid]);
@@ -297,7 +299,7 @@ void login_handler(int userid, int sockfd,  struct sockaddr_in cli_addr){
 				if (bind(newsocket, (struct sockaddr *) &newcli_addr, sizeof(struct sockaddr)) < 0) 
 					printf("ERROR on binding");
 				
-				printf("DEBUG: Old socket: %i New socket: %i\n", sockfd, newsocket);
+				//printf("DEBUG: Old socket: %i New socket: %i\n", sockfd, newsocket);
 				
 				threadparams[i].userid = userid;
 				threadparams[i].sockfd = newsocket;
@@ -381,7 +383,7 @@ int main(int argc, char *argv[])
 		if (msg.type == LOGUSER){
 			userid = profile_handler(list_of_profiles, msg._payload, sockfd, ++seqncount);
 			free(msg._payload);
-			printf("DEBUG: ID DO USER %i \n", userid);
+			//printf("DEBUG: ID DO USER %i \n", userid);
 
 			login_handler(userid, sockfd, cli_addr);
 		}

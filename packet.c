@@ -38,8 +38,8 @@ void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* 
 	msg.seqn = seqn;
 	msg.length = len;
 	msg.timestamp = timestamp;
-
-	sendto(sockfd, &msg, sizeof(msg), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
+    //printf("[+] DEBUG packet: Sending payload %s\n", payload);
+	sendto(sockfd, &msg, 8, 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
     sendto(sockfd, payload, strlen(payload), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
     //printf("%lu",sizeof(msg));
     printf("Sent message: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);;
@@ -47,19 +47,28 @@ void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* 
 // só recebe o packet, chamado pelo recvprintpacket
 struct sockaddr_in recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){
     socklen_t addr_size = sizeof(struct sockaddr_in);
-    int n;
+    int n, recv = 10;
     //espera terminar de ler do socket
     //se a mensagem não for vazia executa a leitura
     //while(recvfrom(sockfd, (*msg)._payload, 8, 0, (struct sockaddr *) &addr, &addr_size)<8);
     //msg->_payload = (char*) malloc((msg->length)*sizeof(char));
-    	while(recvfrom(sockfd, msg, 8, 0, (struct sockaddr *) &addr, &addr_size) < 0);
+        do {
+            recv = recvfrom(sockfd, msg, 8, 0, (struct sockaddr *) &addr, &addr_size);
+        }
+
+    	while(recv < 0);
+
+        if (recv == 0){
+            printf("deu caca\n");
+            return(addr);
+        }
 
     //msg->_payload[msg->length-1]='\0';
         if(msg->length != 0){
             //die("recvfrom()");
-            
+            //printf("[+] DEBUG packet: received %s\n", msg->_payload);
             msg->_payload = (char*) malloc((msg->length)*sizeof(char));
-            n = recvfrom(sockfd, msg->_payload, sizeof((*msg)._payload), 0, (struct sockaddr *) &addr, &addr_size);
+            n = recvfrom(sockfd, msg->_payload, msg->length /*+ strlen(msg->_payload)*/, 0, (struct sockaddr *) &addr, &addr_size);
             msg->_payload[msg->length-1]='\0';
             
         }
