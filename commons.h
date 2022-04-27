@@ -13,4 +13,5 @@
 #define CLIENTLIMIT 500
 #define NOTIFLIMIT 500
 #define FOLLOWLIMIT 500
+#define RM_LIMIT 20
 #endif
