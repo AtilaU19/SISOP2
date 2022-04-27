@@ -42,7 +42,7 @@ void sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char* 
 	sendto(sockfd, &msg, 8, 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
     sendto(sockfd, payload, strlen(payload), 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
     //printf("%lu",sizeof(msg));
-    printf("[+] DEBUG packet > Sent message: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);;
+    printf("[+] DEBUG packet > Sent message: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);
 }
 // só recebe o packet, chamado pelo recvprintpacket
 struct sockaddr_in recvpacket(int sockfd, packet* msg, struct sockaddr_in addr){

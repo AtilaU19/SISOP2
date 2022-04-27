@@ -194,9 +194,9 @@ void *clientmessagehandler(void *arg){
 				break;
 		}
 		
-			
 	}
 	free(msg._payload);
+
 }
 
 // handles client consumes (sending the notifications from their followers)
