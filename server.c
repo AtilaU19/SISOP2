@@ -41,6 +41,16 @@ pthread_barrier_t barriers[CLIENTLIMIT];
 // lista de profiles//
 profile list_of_profiles[CLIENTLIMIT];
 
+//RMs
+int size_of_rmlist;
+
+rm thisRM;
+rm primaryRM;
+rm rmlist[RM_LIMIT];
+
+
+
+
 // ctrl c handle
 void signalHandler(int signal)
 {
@@ -355,6 +365,22 @@ void login_handler(int userid, int sockfd, struct sockaddr_in cli_addr)
 
 int main(int argc, char *argv[])
 {
+
+	if (argc < 3)
+	{
+		fprintf(stderr, "usage ./server <settings_file.txt> <RM identification>\n");
+		exit(0);
+	}
+
+	//Lê do arquivo de settings as configurações de RM, associa às structs desse processo
+	//Assim ele sabe quem ele é/quem é o primary/quem são os outros
+	//E por onde se comunicar com os outros
+
+	read_server_settings(argv[1], atoi(argv[2]), &thisRM, rmlist, &size_of_rmlist, &primaryRM);
+
+	//printf("[+]   Server found in settings   [+]\nId: %i\nPort: %i", thisRM.id, thisRM.port);
+
+
 	int one = 1;
 	int userid, sockfd;
 	socklen_t clilen;
@@ -362,13 +388,15 @@ int main(int argc, char *argv[])
 
 	// incialização das structs
 	init_profiles(list_of_profiles);
-	read_profiles(list_of_profiles);
+	//READ PROFILES VAI MUDAR (receber o RM)
+	read_profiles(list_of_profiles, thisRM.id);
 	init_barriers();
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 	{
 		printf("ERROR opening socket");
 	}
+
 	bzero((char *)&serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
@@ -385,7 +413,7 @@ int main(int argc, char *argv[])
 
 	clilen = sizeof(struct sockaddr_in);
 
-	printf("***** SERVER INITIALIZED *****\n");
+	printf("[+]       SERVER INITIALIZED       [+]\n");
 
 	while (1)
 	{

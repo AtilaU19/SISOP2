@@ -29,12 +29,19 @@ void save_profiles(profile list_of_profiles[CLIENTLIMIT])
 	fclose(followers);
 }
 
-void read_profiles(profile *list_of_profiles)
+void read_profiles(profile *list_of_profiles, int rm_identifier)
 {
 	FILE *profiles, *followers;
 	int num_profiles, i, j, length, follow_id;
 	num_profiles = 0;
 	char *aux;
+	char profiles_file[20];
+	char followers_file[20];
+	//Agora fazemos um arquivo de followers e profiles para cada RM
+	sprintf(profiles_file, "%d", rm_identifier);
+	sprintf(followers_file, "%d", rm_identifier);
+	strcat(profiles_file, "profiles.txt");
+	strcat(followers_file, "followers.txt");
 
 	if ((profiles = fopen("profiles.txt", "r")) && (followers = fopen("followers.txt", "r")))
 	{
@@ -84,7 +91,7 @@ void read_server_settings(char *file_name, int rm_identifier, rm *caller, rm *li
 		exit(1);
 	}
 	int counter, foundPrimary = 0, foundRM = 0;
-	char *buffer = NULL;
+	char * buffer = NULL;
 	char thisline_id[5];
 	int thisline_port;
 	int thisline_isprimary;
@@ -102,7 +109,7 @@ void read_server_settings(char *file_name, int rm_identifier, rm *caller, rm *li
 		{
 			atoi(separator);
 
-			switch (counter)
+			switch(counter)
 			{
 			case 0:
 				strcpy(thisline_id, separator);
@@ -113,7 +120,9 @@ void read_server_settings(char *file_name, int rm_identifier, rm *caller, rm *li
 			case 2:
 				thisline_isprimary = atoi(separator);
 				break;
-			default:
+			}
+			separator = strtok (NULL, " \n");
+			if ( counter > 2 ){
 				printf("Settings file read error\n");
 				exit(1);
 			}
@@ -182,3 +191,4 @@ void read_server_settings(char *file_name, int rm_identifier, rm *caller, rm *li
 
 		*size_of_list_of_rms = rm_count;
 	}
+}

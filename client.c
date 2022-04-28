@@ -10,7 +10,8 @@
 #include <signal.h>
 #include <pthread.h>
 #include "commons.h"
-#include "packet.c"
+#include "frontend.c"
+
 
 int port;
 int seqncnt = 0;
@@ -162,9 +163,9 @@ void validateuserhandle(char *handle)
 
 int main(int argc, char *argv[])
 {
-	pthread_t thr_client_input, thr_client_display;
+	pthread_t thr_client_input, thr_client_display, thr_frontend_startup;
 
-	int n;
+	int n, serv_primary_port, port_front;
 	unsigned int length;
 	char handle[20];
 
@@ -190,6 +191,15 @@ int main(int argc, char *argv[])
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
 
+
+	//FRONTEND
+	struct frontend_params params;
+    strcpy(params.host, argv[2]);//TALVEZ DE CACA PQ ELE TAVA PEGANDO DIRETO DO ARGS SEM GETHOSTBYNAME
+    params.primary_port = serv_primary_port;
+
+	pthread_create(&thr_frontend_startup, NULL, frontend_startup, &params);
+    port_front = get_frontend_port();
+
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(port);
 	serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
@@ -203,6 +213,7 @@ int main(int argc, char *argv[])
 
 	pthread_join(thr_client_display, NULL);
 	pthread_join(thr_client_input, NULL);
+	pthread_join(thr_frontend_startup, NULL);
 	close(sockfd);
 	return 0;
 }
