@@ -178,6 +178,7 @@ void *clientmessagehandler(void *arg)
 	while (par->flag)
 	{
 		par->cli_addr = recvpacket(par->sockfd, &msg, par->cli_addr);
+		printf("[+] DEBUG server > Received message: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
 		// printf("estourou depois do recvpacket\n");
 
 		switch (msg.type)
@@ -246,7 +247,7 @@ void *notificationhandler(void *arg)
 				// sends notification
 
 				inet_ntop(AF_INET, &par->cli_addr.sin_addr, buffer, sizeof(buffer));
-				printf("[+] DEBUG server > sockfd = %i, send address = %s\n", sockfd, buffer);
+				//printf("[+] DEBUG server > sockfd = %i, send address = %s\n", sockfd, buffer);
 				// TA PEGANDO O ENDEREÇO ERRADO QUANDO N TA FEITO O FOLLOW
 
 				sendpacket(sockfd, NOTIFICATION, ++seqncount, strlen(payload) + 1, getcurrenttime(), payload, par->cli_addr);
@@ -414,6 +415,8 @@ int main(int argc, char *argv[])
 	clilen = sizeof(struct sockaddr_in);
 
 	printf("[+]       SERVER INITIALIZED       [+]\n");
+
+	//checkaddress(serv_addr);
 
 	while (1)
 	{

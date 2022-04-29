@@ -13,15 +13,16 @@
 #include "frontend.c"
 
 
-int port;
+int port_front;
 int seqncnt = 0;
 int sockfd;
 struct hostent *server;
-struct sockaddr_in serv_addr, cli_addr;
+struct sockaddr_in frontend_addr, cli_addr;
+pthread_mutex_t frontend_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void signal_handler(int signal)
 {
-	sendpacket(sockfd, QUIT, seqncnt++, 0, getcurrenttime(), "", serv_addr);
+	sendpacket(sockfd, QUIT, seqncnt++, 0, getcurrenttime(), "", frontend_addr);
 	close(sockfd);
 	printf("Sessão encerrada\n");
 	exit(1);
@@ -42,7 +43,7 @@ int getaction(char *buffer)
 // fecha a session quando der ctrl c no terminal
 void closeSession(int sockfd)
 {
-	sendpacket(sockfd, QUIT, ++seqncnt, 0, 0, "", serv_addr);
+	sendpacket(sockfd, QUIT, ++seqncnt, 0, 0, "", frontend_addr);
 	close(sockfd);
 	system("clear");
 	printf("Session closed\n");
@@ -59,7 +60,7 @@ void *sendmessage(void *arg)
 
 	while (TRUE)
 	{
-		printf("Estou no send message e o socket é %i\n", sockfd);
+		//printf("Estou no send message e o socket é %i\n", sockfd);
 		// clears buffer
 		bzero(buffer, BUFFER_SIZE);
 		if (!fgets(buffer, BUFFER_SIZE, stdin))
@@ -79,11 +80,11 @@ void *sendmessage(void *arg)
 			}
 			else
 			{
-				sendpacket(sockfd, SEND, ++seqncnt, strlen(buffer) - 5, getcurrenttime(), buffer + 5 * sizeof(char), serv_addr);
+				sendpacket(sockfd, SEND, ++seqncnt, strlen(buffer) - 5, getcurrenttime(), buffer + 5 * sizeof(char), frontend_addr);
 			}
 			break;
 		case FOLLOW:
-			sendpacket(sockfd, FOLLOW, ++seqncnt, strlen(buffer) - 7, getcurrenttime(), buffer + 7 * sizeof(char), serv_addr);
+			sendpacket(sockfd, FOLLOW, ++seqncnt, strlen(buffer) - 7, getcurrenttime(), buffer + 7 * sizeof(char), frontend_addr);
 			break;
 		default:
 			printf("Action unknown. Should be:\nSEND <message>\nFOLLOW <@user>\nQUIT\n");
@@ -91,26 +92,10 @@ void *sendmessage(void *arg)
 	}
 }
 
-int change_port(char *newport, int oldsockfd)
-{
-	int newsockfd, newportint = atoi(newport);
-	close(oldsockfd);
-	printf("Changing port from %i to %s\n", port, newport);
-	if ((newsockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		printf("ERROR opening socket");
-
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(newportint);
-	serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
-	bzero(&(serv_addr.sin_zero), 8);
-
-	return newsockfd;
-}
 
 void *receivemessage(void *arg)
 {
 	// int sockfd = *(int *) arg;
-	char *acknowledge = "ack";
 	packet msg;
 
 	signal(SIGINT, signal_handler);
@@ -134,9 +119,6 @@ void *receivemessage(void *arg)
 			exit(1);
 			break;
 		case CHANGEPORT:
-			printf("Server accepted login attempt, changing port\n");
-			sockfd = change_port(msg._payload, sockfd);
-			sendpacket(sockfd, ACK, seqncnt++, strlen(acknowledge), getcurrenttime(), acknowledge, serv_addr);
 			break;
 		default:
 			printf("Unknown message error");
@@ -165,11 +147,11 @@ int main(int argc, char *argv[])
 {
 	pthread_t thr_client_input, thr_client_display, thr_frontend_startup;
 
-	int n, serv_primary_port, port_front;
+	int n, serv_primary_port;
 	unsigned int length;
-	char handle[20];
+	char handle[50];
 
-	if (argc < 4)
+	if (argc != 4)
 	{
 		fprintf(stderr, "usage ./app_cliente <@profile> <server_address> <port> \n");
 		exit(0);
@@ -182,11 +164,11 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-	port = atoi(argv[3]);
+	serv_primary_port = atoi(argv[3]);
 
 	strcpy(handle, argv[1]);
 	validateuserhandle(handle);
-	printf("User handle: %s , Port: %d\nUse SEND to send a message to all followers.\nUse FOLLOW <@handle> to follow another user.\n\n", handle, port);
+	printf("User handle: %s , Port: %d\nUse SEND to send a message to all followers.\nUse FOLLOW <@handle> to follow another user.\n\n", handle, serv_primary_port);
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
@@ -194,19 +176,23 @@ int main(int argc, char *argv[])
 
 	//FRONTEND
 	struct frontend_params params;
-    strcpy(params.host, argv[2]);//TALVEZ DE CACA PQ ELE TAVA PEGANDO DIRETO DO ARGS SEM GETHOSTBYNAME
+	strcpy(params.handle, handle);
+    strcpy(params.host, argv[2]);
     params.primary_port = serv_primary_port;
 
 	pthread_create(&thr_frontend_startup, NULL, frontend_startup, &params);
     port_front = get_frontend_port();
+	printf("recebi o port do frontend: %i\n", port_front);
 
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(port);
-	serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
-	bzero(&(serv_addr.sin_zero), 8);
+	//depois de conseguir o socket do frontend conecta com ele
 
-	sendpacket(sockfd, LOGUSER, ++seqncnt, strlen(handle) + 1, getcurrenttime(), handle, serv_addr);
-
+	frontend_addr.sin_family = AF_INET;
+	frontend_addr.sin_port = htons(port_front);
+	frontend_addr.sin_addr = *((struct in_addr *)server->h_addr);
+	bzero(&(frontend_addr.sin_zero), 8);
+	printf("vou enviar o login\n");
+	sendpacket(sockfd, LOGUSER, ++seqncnt, strlen(handle) + 1, getcurrenttime(), handle, frontend_addr);
+	printf("enviei o login\n");
 	// Começa uma thread para receber mensagens e outra para enviar
 	pthread_create(&thr_client_display, NULL, receivemessage, &sockfd);
 	pthread_create(&thr_client_input, NULL, sendmessage, &sockfd);
