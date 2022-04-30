@@ -26,6 +26,16 @@ typedef struct thread_parameters
 
 } thread_parameters;
 
+typedef struct multicast_parameters
+{
+	int userid;
+	int type;
+	int seqncnt;
+	int length;
+	int time;
+	char* payload;
+}multicast_parameters;
+
 int n, seqncount, i = 1;
 struct sockaddr_in serv_addr;
 packet msg;
@@ -35,6 +45,7 @@ pthread_t client_pthread[2 * CLIENTLIMIT];
 
 pthread_mutex_t send_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t follow_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t multicast_mutex = PTHREAD_MUTEX_INITIALIZER;
 // barreira do consumidor//
 pthread_barrier_t barriers[CLIENTLIMIT];
 
@@ -364,6 +375,22 @@ void login_handler(int userid, int sockfd, struct sockaddr_in cli_addr)
 	// exit(1);
 }
 
+void *backup_handler(void* arg){
+
+}
+
+//função para espelhar uma request do primary para os backups
+void multicast_primary_to_backups (multicast_parameters par){
+	pthread_mutex_lock(&multicast_mutex);
+	//faz um foreach com os servers na lista
+	for(int rm = 0; rm < size_of_rmlist; rm++){
+		//se o socket do rm for válido
+		if(rmlist[rm].socket != -1){
+			
+		}
+	}
+}
+
 int main(int argc, char *argv[])
 {
 
@@ -379,11 +406,11 @@ int main(int argc, char *argv[])
 
 	read_server_settings(argv[1], atoi(argv[2]), &thisRM, rmlist, &size_of_rmlist, &primaryRM);
 
-	//printf("[+]   Server found in settings   [+]\nId: %i\nPort: %i", thisRM.id, thisRM.port);
+	printf("[+]   Server found in settings   [+]\nId: %i\nPort: %i\nPrimary?:%i\n", thisRM.id, thisRM.port, thisRM.is_primary);
 
 
 	int one = 1;
-	int userid, sockfd;
+	int userid;
 	socklen_t clilen;
 	struct sockaddr_in cli_addr;
 
@@ -393,7 +420,7 @@ int main(int argc, char *argv[])
 	read_profiles(list_of_profiles, thisRM.id);
 	init_barriers();
 
-	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+	if ((thisRM.socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 	{
 		printf("ERROR opening socket");
 	}
@@ -403,41 +430,60 @@ int main(int argc, char *argv[])
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	serv_addr.sin_port = htons(LOGINPORT);
 
-	if ((setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1))
+	if ((setsockopt(thisRM.socket, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1))
 	{
 		printf("Failed setsockopt.");
 		exit(1);
 	}
 
-	if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr)) < 0)
+	if (bind(thisRM.socket, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr)) < 0)
 		printf("ERROR on binding");
 
 	clilen = sizeof(struct sockaddr_in);
+	
+	
+	
+	//SERVIDOR PRIMÁRIO ROTINA
+	
+	
+	
+	if (thisRM.is_primary){
+		printf("[+]      PRIMARY SERVER INITIALIZED       [+]\n");
+			
+		while (1)
+		{
+			signal(SIGINT, signalHandler);
+			/* receive from socket */
+			cli_addr = recvpacket(thisRM.socket, &msg, cli_addr);
 
-	printf("[+]       SERVER INITIALIZED       [+]\n");
+			if (msg.type == LOGUSER)
+			{
+				userid = profile_handler(list_of_profiles, msg._payload, thisRM.socket, ++seqncount);
+				free(msg._payload);
+				// printf("[+] DEBUG server > ID DO USER %i \n", userid);
+
+				login_handler(userid, thisRM.socket, cli_addr);
+			}
+			else
+			{
+				printf("[+] Received this instead of login packet: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
+				printf("User not logged in.\n");
+			}
+		}
+		close(thisRM.socket);
+		return 0;
+	}
+	
+	
+	
+	//SERVIDOR BACKUP ROTINA
+	
+	
+	
+	else{
+		printf("[+]         BACKUP SERVER INITIALIZED         [+]\n");
+
+	}
 
 	//checkaddress(serv_addr);
-
-	while (1)
-	{
-		signal(SIGINT, signalHandler);
-		/* receive from socket */
-		cli_addr = recvpacket(sockfd, &msg, cli_addr);
-
-		if (msg.type == LOGUSER)
-		{
-			userid = profile_handler(list_of_profiles, msg._payload, sockfd, ++seqncount);
-			free(msg._payload);
-			// printf("[+] DEBUG server > ID DO USER %i \n", userid);
-
-			login_handler(userid, sockfd, cli_addr);
-		}
-		else
-		{
-			printf("[+] Received this instead of login packet: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
-			printf("User not logged in.\n");
-		}
-	}
-	close(sockfd);
-	return 0;
 }

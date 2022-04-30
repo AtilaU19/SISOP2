@@ -16,17 +16,10 @@
 int port_front;
 int seqncnt = 0;
 int sockfd;
+char disconnecting[BUFFER_SIZE];
 struct hostent *server;
 struct sockaddr_in frontend_addr, cli_addr;
 pthread_mutex_t frontend_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-void signal_handler(int signal)
-{
-	sendpacket(sockfd, QUIT, seqncnt++, 0, getcurrenttime(), "", frontend_addr);
-	close(sockfd);
-	printf("Sessão encerrada\n");
-	exit(1);
-}
 
 int getaction(char *buffer)
 {
@@ -40,15 +33,21 @@ int getaction(char *buffer)
 		return -1;
 }
 
-// fecha a session quando der ctrl c no terminal
+// fecha a session quando excedeu o número de sessões limite
 void closeSession(int sockfd)
 {
-	sendpacket(sockfd, QUIT, ++seqncnt, 0, 0, "", frontend_addr);
+	sendpacket(sockfd, QUIT, seqncnt++, strlen(disconnecting), getcurrenttime(), disconnecting, frontend_addr);
 	close(sockfd);
 	system("clear");
 	printf("Session closed\n");
 	exit(1);
 }
+
+void signal_handler(int signal)
+{
+	closeSession(sockfd);
+}
+
 // function to send messages from client
 // should be called in a separate thread
 // as to not conflict with receiving messages
@@ -115,8 +114,7 @@ void *receivemessage(void *arg)
 			break;
 		case QUIT:
 			printf("Simultaneous session limit exceeded.");
-			close(sockfd);
-			exit(1);
+			closeSession(sockfd);
 			break;
 		case CHANGEPORT:
 			break;
@@ -139,8 +137,11 @@ void validateuserhandle(char *handle)
 	// Testa se o primeiro caractere é @
 	if ((handle[0] != '@'))
 	{
-		printf("Handle must start with @\nExample: @TestUser");
+		printf("Handle must start with @\nExample: @TestUser\n");
+		exit(0);
 	}
+
+	sprintf(disconnecting,"User %s disconnected.", handle);
 }
 
 int main(int argc, char *argv[])
@@ -168,6 +169,7 @@ int main(int argc, char *argv[])
 
 	strcpy(handle, argv[1]);
 	validateuserhandle(handle);
+
 	printf("User handle: %s , Port: %d\nUse SEND to send a message to all followers.\nUse FOLLOW <@handle> to follow another user.\n\n", handle, serv_primary_port);
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)

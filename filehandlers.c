@@ -172,7 +172,7 @@ void read_server_settings(char *file_name, int rm_identifier, rm *caller, rm *li
 		// atribui à lista de rms tamanho igual ao número de rms lidos no arquivo
 
 		// Da exit se nao achou a RM depois de percorrer todo o settings file
-		if (!foundRM && (atoi(thisline_id) == 3))   ///////// ACHAR SOLUCAO MELHOR (3 é o numero do ultimo id, mas isso pode variar)
+		if (!foundRM && (atoi(thisline_id) == 9))   ///////// ACHAR SOLUCAO MELHOR (3 é o numero do ultimo id, mas isso pode variar)
 		{
 			printf("RM not present in settings file.\n");
 			exit(1);
