@@ -33,15 +33,18 @@ typedef struct multicast_parameters
 	int seqncnt;
 	int length;
 	int time;
-	char* payload;
-}multicast_parameters;
+	char *payload;
+} multicast_parameters;
 
 int n, seqncount, i = 1;
 struct sockaddr_in serv_addr;
+int ongoing_election = 0;
 packet msg;
 
 thread_parameters threadparams[CLIENTLIMIT];
 pthread_t client_pthread[2 * CLIENTLIMIT];
+pthread_t heartbeat_pthread;
+struct hostent *server;
 
 pthread_mutex_t send_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t follow_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -52,15 +55,12 @@ pthread_barrier_t barriers[CLIENTLIMIT];
 // lista de profiles//
 profile list_of_profiles[CLIENTLIMIT];
 
-//RMs
+// RMs
 int size_of_rmlist;
 
 rm thisRM;
 rm primaryRM;
 rm rmlist[RM_LIMIT];
-
-
-
 
 // ctrl c handle
 void signalHandler(int signal)
@@ -258,8 +258,8 @@ void *notificationhandler(void *arg)
 				// sends notification
 
 				inet_ntop(AF_INET, &par->cli_addr.sin_addr, buffer, sizeof(buffer));
-				//printf("[+] DEBUG server > sockfd = %i, send address = %s\n", sockfd, buffer);
-				// TA PEGANDO O ENDEREÇO ERRADO QUANDO N TA FEITO O FOLLOW
+				// printf("[+] DEBUG server > sockfd = %i, send address = %s\n", sockfd, buffer);
+				//  TA PEGANDO O ENDEREÇO ERRADO QUANDO N TA FEITO O FOLLOW
 
 				sendpacket(sockfd, NOTIFICATION, ++seqncount, strlen(payload) + 1, getcurrenttime(), payload, par->cli_addr);
 				// if(payload){
@@ -375,18 +375,58 @@ void login_handler(int userid, int sockfd, struct sockaddr_in cli_addr)
 	// exit(1);
 }
 
-void *backup_handler(void* arg){
+void connect_to_primary()
+{
+	struct sockaddr_in server_addr, client_addr;
+	packet msg;
+	if (primaryRM.socket = socket(AF_INET, SOCK_DGRAM, 0) == -1)
+	{
+		printf("failed to open socket\n");
+	}
 
+	server_addr.sin_addr = *((struct in_addr *)server->h_addr);
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(primaryRM.port);
+	bzero(&(server_addr.sin_zero), 8);
+	sendpacket(primaryRM.socket, BACKUP, seqncount++, strlen(thisRM.id_string) + 1, getcurrenttime(), thisRM.id_string, server_addr);
+	recvpacket(primaryRM.socket, &msg, client_addr);
+	if (msg.type != ACK)
+	{
+		primaryRM.socket = -1;
+	}
 }
 
-//função para espelhar uma request do primary para os backups
-void multicast_primary_to_backups (multicast_parameters par){
+// função para espelhar uma request do primary para os backups
+void multicast_primary_to_backups(multicast_parameters par)
+{
 	pthread_mutex_lock(&multicast_mutex);
-	//faz um foreach com os servers na lista
-	for(int rm = 0; rm < size_of_rmlist; rm++){
-		//se o socket do rm for válido
-		if(rmlist[rm].socket != -1){
-			
+	// faz um foreach com os servers na lista
+	for (int rm = 0; rm < size_of_rmlist; rm++)
+	{
+		// se o socket do rm for válido
+		if (rmlist[rm].socket != -1)
+		{
+		}
+	}
+}
+
+void *heartbeat_signal(void *arg)
+{
+	packet msg;
+	multicast_parameters par;
+	par.userid = -1;
+	par.length = strlen("heartbeat");
+	par.payload = "heartbeat";
+	par.seqncnt = seqncount++;
+	par.time = getcurrenttime();
+	par.type = HEARTBEAT;
+	while (TRUE)
+	{
+		sleep(HEARTBEAT_DURATION);
+		if (!ongoing_election)
+		{
+			multicast_primary_to_backups(par);
+			printf("Sending heartbeat to backups\n");
 		}
 	}
 }
@@ -400,14 +440,13 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-	//Lê do arquivo de settings as configurações de RM, associa às structs desse processo
-	//Assim ele sabe quem ele é/quem é o primary/quem são os outros
-	//E por onde se comunicar com os outros
+	// Lê do arquivo de settings as configurações de RM, associa às structs desse processo
+	// Assim ele sabe quem ele é/quem é o primary/quem são os outros
+	// E por onde se comunicar com os outros
 
 	read_server_settings(argv[1], atoi(argv[2]), &thisRM, rmlist, &size_of_rmlist, &primaryRM);
 
 	printf("[+]   Server found in settings   [+]\nId: %i\nPort: %i\nPrimary?:%i\n", thisRM.id, thisRM.port, thisRM.is_primary);
-
 
 	int one = 1;
 	int userid;
@@ -416,7 +455,7 @@ int main(int argc, char *argv[])
 
 	// incialização das structs
 	init_profiles(list_of_profiles);
-	//READ PROFILES VAI MUDAR (receber o RM)
+	// READ PROFILES VAI MUDAR (receber o RM)
 	read_profiles(list_of_profiles, thisRM.id);
 	init_barriers();
 
@@ -428,7 +467,7 @@ int main(int argc, char *argv[])
 	bzero((char *)&serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	serv_addr.sin_port = htons(LOGINPORT);
+	serv_addr.sin_port = htons(thisRM.port);
 
 	if ((setsockopt(thisRM.socket, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1))
 	{
@@ -440,16 +479,29 @@ int main(int argc, char *argv[])
 		printf("ERROR on binding");
 
 	clilen = sizeof(struct sockaddr_in);
-	
-	
-	
-	//SERVIDOR PRIMÁRIO ROTINA
-	
-	
-	
-	if (thisRM.is_primary){
+
+	// SERVIDOR PRIMÁRIO ROTINA
+
+	if (thisRM.is_primary)
+	{
 		printf("[+]      PRIMARY SERVER INITIALIZED       [+]\n");
-			
+
+		if (pthread_create(&heartbeat_pthread, NULL, heartbeat_signal, NULL) != 0)
+		{
+			printf("Heartbeat failed to initialize\n");
+		}
+
+		server = gethostbyname("localhost");
+		serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
+		serv_addr.sin_port = htons(primaryRM.port);
+		serv_addr.sin_family = AF_INET;
+		bzero(&(serv_addr.sin_zero), 8);
+
+		/*
+				for (int userid = 0; userid<CLIENTLIMIT; userid++){
+					if (list_of_profiles[userid].)
+				}
+		*/
 		while (1)
 		{
 			signal(SIGINT, signalHandler);
@@ -473,17 +525,16 @@ int main(int argc, char *argv[])
 		close(thisRM.socket);
 		return 0;
 	}
-	
-	
-	
-	//SERVIDOR BACKUP ROTINA
-	
-	
-	
-	else{
+
+	// SERVIDOR BACKUP ROTINA
+
+	else
+	{
 		printf("[+]         BACKUP SERVER INITIALIZED         [+]\n");
+
+		connect_to_primary();
 
 	}
 
-	//checkaddress(serv_addr);
+	// checkaddress(serv_addr);
 }

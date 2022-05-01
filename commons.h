@@ -14,4 +14,7 @@
 #define NOTIFLIMIT 500
 #define FOLLOWLIMIT 500
 #define RM_LIMIT 20
+#define HEARTBEAT 8
+#define BACKUP 9
+#define HEARTBEAT_DURATION 1
 #endif
