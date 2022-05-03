@@ -39,11 +39,14 @@ typedef struct multicast_parameters
 int n, seqncount, i = 1;
 struct sockaddr_in serv_addr;
 int ongoing_election = 0;
+int threadIsOpen = 0;
 packet msg;
 
 thread_parameters threadparams[CLIENTLIMIT];
 pthread_t client_pthread[2 * CLIENTLIMIT];
 pthread_t heartbeat_pthread;
+pthread_t connect_to_other_backups_pthread;
+pthread_t receive_bully_pthread;
 struct hostent *server;
 
 pthread_mutex_t send_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -377,6 +380,8 @@ void login_handler(int userid, int sockfd, struct sockaddr_in cli_addr)
 
 void connect_to_primary()
 {
+
+	//TA DANDO SEGFAULT
 	struct sockaddr_in server_addr, client_addr;
 	packet msg;
 	if (primaryRM.socket = socket(AF_INET, SOCK_DGRAM, 0) == -1)
@@ -429,6 +434,14 @@ void *heartbeat_signal(void *arg)
 			printf("Sending heartbeat to backups\n");
 		}
 	}
+}
+
+void recv_bully_msg(void *arg){
+	return(0);
+}
+
+void connect_to_other_backups(void *arg){
+	return(0);
 }
 
 int main(int argc, char *argv[])
@@ -532,7 +545,37 @@ int main(int argc, char *argv[])
 	{
 		printf("[+]         BACKUP SERVER INITIALIZED         [+]\n");
 
+		int followed, follower, RMcounter;
+
 		connect_to_primary();
+
+		if (pthread_create(&connect_to_other_backups_pthread, NULL, connect_to_other_backups, NULL) != 0){
+			printf("Error creating thread to connect to other backup servers\n");
+		}
+
+		for(RMcounter = 0; RMcounter<RM_LIMIT; RMcounter++){
+			threadIsOpen[RMcounter] = 0;
+		}
+
+		while(!thisRM.is_primary){
+			//abre a thread para todos os RMS que não estão abertos ainda
+			//possuem socket válido e são backups
+			for(RMcounter = 0; RMcounter<size_of_rmlist; RMcounter++){
+				if(!threadIsOpen[rmlist[RMcounter].id] 
+				&& rmlist[RMcounter].socket != -1 
+				&& !rmlist[RMcounter].is_primary){
+					threadIsOpen[rmlist[RMcounter].id] = 1;
+					if(pthread_create(
+						&receive_bully_pthread[rmlist[RMcounter].id],
+						NULL, recv_bully_msg,
+						(void*)((long int)&rmlist[RMcounter].id)) != 0){
+							printf("error creating bully message receiving thread\n");
+					}
+				}
+			}
+
+			
+		}
 
 	}
 
