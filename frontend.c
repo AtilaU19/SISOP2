@@ -61,28 +61,38 @@ int change_port(char *newport, int oldsocket)
  
 //Envia as mensagens so client para o server
 void *client_to_primary_server(void *arg){
+
+	packetReturn pr;
+
 	sendpacket(frontend_primary_socket, ACK, seqncnt++, strlen(acknowledge)+1, getcurrenttime(), acknowledge, primary_addr);
 	//Receive message
     packet message;
     while(1){	
-        cli_addr_front = recvpacket(client_frontend_socket, &message, cli_addr_front);
-		//printf("-----FRONTEND-----\nReceived \"%s\" from client, sending to server.\n------------------\n", message._payload);
-        sendpacket(frontend_primary_socket,message.type, message.seqn, message.length, message.timestamp,message._payload, primary_addr);
-        free(message._payload);      
+        pr = recvpacket(client_frontend_socket, &message, cli_addr_front);
+		if (pr.success){
+			cli_addr_front = pr.addr;
+			//printf("-----FRONTEND-----\nReceived \"%s\" from client, sending to server.\n------------------\n", message._payload);
+			sendpacket(frontend_primary_socket,message.type, message.seqn, message.length, message.timestamp,message._payload, primary_addr);
+			free(message._payload);     
+			} 
         }
     }
 
 //Envia as mensagens do server para o client
 void *primary_server_to_client(void *arg){
 
+	packetReturn pr;
+
 	//Recebe mensagem
     packet message;
     while(1){
-    	primary_addr = recvpacket(frontend_primary_socket, &message, primary_addr);
-		//printf("-----FRONTEND-----\nReceived \"%s\" from server, sending to client.\n------------------\n", message._payload);
-		sendpacket(client_frontend_socket,message.type, message.seqn, message.length, message.timestamp,message._payload, cli_addr_front);
-        free(message._payload);
-           
+    	pr = recvpacket(frontend_primary_socket, &message, primary_addr);
+		primary_addr = pr.addr;
+		if(pr.success){
+			//printf("-----FRONTEND-----\nReceived \"%s\" from server, sending to client.\n------------------\n", message._payload);
+			sendpacket(client_frontend_socket,message.type, message.seqn, message.length, message.timestamp,message._payload, cli_addr_front);
+			free(message._payload);
+		}
    	}
 }
 
@@ -135,7 +145,7 @@ void *frontend_startup(void *arg){
 	//bloqueia esperando o login attempt do usuario
 	//
 	//sendpacket(client_frontend_socket, LOGUSER, ++seqncnt, strlen(par->handle) + 1, getcurrenttime(), par->handle, primary_addr);
-	cli_addr_front = recvpacket(client_frontend_socket, &msg, cli_addr_front);
+	cli_addr_front = recvpacket(client_frontend_socket, &msg, cli_addr_front).addr;
 	//sendpacket(client_frontend_socket, ACK, seqncnt++, strlen(connection_estabilished), getcurrenttime(), connection_estabilished, cli_addr_front);
 	//TALVEZ ELE ESTEJA FAZENDO ALGO ERRADO NO RECVPACKET
 	//printf("recebeu o packet com isso aqui: %s\n", msg._payload);
@@ -155,7 +165,7 @@ void *frontend_startup(void *arg){
 
 	sendpacket(frontend_primary_socket, msg.type, seqncnt++, strlen(msg._payload) + 1, getcurrenttime(), msg._payload, primary_addr);
 	while(!logged){
-		serv_addr = recvpacket(frontend_primary_socket, &msg, serv_addr);
+		serv_addr = recvpacket(frontend_primary_socket, &msg, serv_addr).addr;
 	if (msg.type == CHANGEPORT){
 			printf("Server accepted login attempt, changing port\n");
 			frontend_primary_socket = change_port(msg._payload, frontend_primary_socket);

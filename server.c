@@ -39,7 +39,7 @@ typedef struct multicast_parameters
 int n, seqncount = 0, i = 1;
 struct sockaddr_in serv_addr;
 int ongoing_election = 0;
-int threadIsOpen[RM_LIMIT] = 0;
+int threadIsOpen[RM_LIMIT];
 packet msg;
 
 thread_parameters threadparams[CLIENTLIMIT];
@@ -197,7 +197,7 @@ void *clientmessagehandler(void *arg)
 
 	while (par->flag)
 	{
-		par->cli_addr = recvpacket(par->sockfd, &msg, par->cli_addr);
+		par->cli_addr = recvpacket(par->sockfd, &msg, par->cli_addr).addr;
 		printf("[+] DEBUG server > Received message: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
 		// printf("estourou depois do recvpacket\n");
 
@@ -357,7 +357,7 @@ void login_handler(int userid, int sockfd, struct sockaddr_in cli_addr)
 		inet_ntop( AF_INET, &cli_addr.sin_addr, debug, sizeof( debug ));
 		printf("[+] DEBUG server > sockfd = %i, CLIENT address = %s\n", sockfd, debug);
 		*/
-		newcli_addr = recvpacket(newsocket, &msg, newcli_addr);
+		newcli_addr = recvpacket(newsocket, &msg, newcli_addr).addr;
 		/*
 		inet_ntop( AF_INET, &newcli_addr.sin_addr, debug, sizeof( debug ));
 		printf("[+] DEBUG server > sockfd = %i, NEW address = %s\n", sockfd, debug);
@@ -504,7 +504,7 @@ void become_primary()
       	if(rmlist[i].socket != -1 && rmlist[i].id != thisRM.id)
 		{
 			// FAZER FUNCAO
-			if(send_packet_with_userid(rmlist[i].socket,thisRM.id, BULLY_COORDINATOR_MSG, ++seqncount, strlen("coord")+1, getTime(), "coord"))	
+			if(send_packet_with_userid(rmlist[i].socket,thisRM.id, BULLY_COORDINATOR_MSG, ++seqncount, strlen("coord")+1, getcurrenttime(), "coord"))	
 				
 				printf("Sent a coordinator message to RM %i\n", rmlist[i].id);
 			else
@@ -528,7 +528,7 @@ void bully_election()
     	if(rmlist[i].id > thisRM.id)
       	{
 			// FAZER FUNCAO
-         	if(send_packet_with_userid(rmlist[i].socket, thisRM.id, BULLY_ELECTION_MSG, ++seqncount, strlen("election")+1, getTime(), "election"))
+         	if(send_packet_with_userid(rmlist[i].socket, thisRM.id, BULLY_ELECTION_MSG, ++seqncount, strlen("election")+1, getcurrenttime(), "election"))
 
 				printf("[+] Sent an election message to backup %i.\n", rmlist[i].id);
          	else
@@ -638,7 +638,7 @@ int main(int argc, char *argv[])
 		{
 			signal(SIGINT, signalHandler);
 			/* receive from socket */
-			cli_addr = recvpacket(thisRM.socket, &msg, cli_addr);
+			cli_addr = recvpacket(thisRM.socket, &msg, cli_addr).addr;
 
 			if (msg.type == LOGUSER)
 			{

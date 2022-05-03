@@ -102,7 +102,7 @@ void *receivemessage(void *arg)
 	while (TRUE)
 	{
 		// printf("Estou no receive package e o socket é %i\n", sockfd);
-		cli_addr = recvpacket(sockfd, &msg, cli_addr);
+		cli_addr = recvpacket(sockfd, &msg, cli_addr).addr;
 		// printf("[+] DEBUG client > received %s\n", msg._payload);
 		switch (msg.type)
 		{
