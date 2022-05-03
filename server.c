@@ -36,17 +36,17 @@ typedef struct multicast_parameters
 	char *payload;
 } multicast_parameters;
 
-int n, seqncount, i = 1;
+int n, seqncount = 0, i = 1;
 struct sockaddr_in serv_addr;
 int ongoing_election = 0;
-int threadIsOpen = 0;
+int threadIsOpen[RM_LIMIT] = 0;
 packet msg;
 
 thread_parameters threadparams[CLIENTLIMIT];
 pthread_t client_pthread[2 * CLIENTLIMIT];
 pthread_t heartbeat_pthread;
 pthread_t connect_to_other_backups_pthread;
-pthread_t receive_bully_pthread;
+pthread_t receive_bully_pthread[RM_LIMIT];
 struct hostent *server;
 
 pthread_mutex_t send_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -64,6 +64,12 @@ int size_of_rmlist;
 rm thisRM;
 rm primaryRM;
 rm rmlist[RM_LIMIT];
+
+//VARIABLES FOR BULLY
+int open_thread[RM_LIMIT];
+int coordinator_message = 0;
+int n_of_answers = 0;
+int election_message = 0;
 
 // ctrl c handle
 void signalHandler(int signal)
@@ -388,13 +394,15 @@ void connect_to_primary()
 	{
 		printf("failed to open socket\n");
 	}
-
+	server = gethostbyname("localhost");
 	server_addr.sin_addr = *((struct in_addr *)server->h_addr);
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(primaryRM.port);
 	bzero(&(server_addr.sin_zero), 8);
 	sendpacket(primaryRM.socket, BACKUP, seqncount++, strlen(thisRM.id_string) + 1, getcurrenttime(), thisRM.id_string, server_addr);
+	printf("\nTESTE 1\n");
 	recvpacket(primaryRM.socket, &msg, client_addr);
+	printf("\nTESTE 2\n");
 	if (msg.type != ACK)
 	{
 		primaryRM.socket = -1;
@@ -442,6 +450,117 @@ void recv_bully_msg(void *arg){
 
 void connect_to_other_backups(void *arg){
 	return(0);
+}
+
+
+void close_backup_threads()
+{
+	int i;
+	thisRM.is_primary = 1;
+	pthread_cancel(connect_to_other_backups_pthread);
+	
+	for(i = 0; i < RM_LIMIT; i++)
+	{
+		if(open_thread[i] && open_thread[i] != -1)
+		{
+			pthread_cancel(receive_bully_pthread[i]);
+			open_thread[i] = -1;
+		}  
+	}
+}
+
+int get_rm_id(int id)
+{
+	int i;
+
+   	for(i = 0; i < RM_LIMIT; i++)
+	{
+      	if(rmlist[i].id == id)
+        	return i;
+   	}
+
+   	return -1;
+}
+
+void primary_update(int coordinator_id)
+{
+	int id = get_rm_id(coordinator_id);
+
+	primaryRM.id  = rmlist[id].id;
+	primaryRM.socket = rmlist[id].socket;
+	strcpy(primaryRM.id_string, rmlist[id].id_string);
+	primaryRM.port = rmlist[id].port;
+	rmlist[id].socket = -1;
+
+	printf("[+] The new primary is RM %i\n", coordinator_id);
+}
+
+void become_primary()
+{
+   	int i = 0;
+   	for(i = 0; i < size_of_rmlist; i++)
+   	{
+	   	// Envia uma mensagem de election para quem nao tem o socket = -1
+      	if(rmlist[i].socket != -1 && rmlist[i].id != thisRM.id)
+		{
+			// FAZER FUNCAO
+			if(send_packet_with_userid(rmlist[i].socket,thisRM.id, BULLY_COORDINATOR_MSG, ++seqncount, strlen("coord")+1, getTime(), "coord"))	
+				
+				printf("Sent a coordinator message to RM %i\n", rmlist[i].id);
+			else
+				rmlist[i].socket = -1;
+		}               
+	}
+	close_backup_threads();
+}
+
+void bully_election()
+{
+	printf("[+]  BULLY ELECTION STARTED  [+]\n");
+	int i = 0;
+	ongoing_election = 1;
+	n_of_answers = 0;
+	coordinator_message = 0;
+
+	for(i = 0; i < size_of_rmlist; i++)
+   	{
+		// Envia uma mensagem de election para todas RM com id maior que o seu
+    	if(rmlist[i].id > thisRM.id)
+      	{
+			// FAZER FUNCAO
+         	if(send_packet_with_userid(rmlist[i].socket, thisRM.id, BULLY_ELECTION_MSG, ++seqncount, strlen("election")+1, getTime(), "election"))
+
+				printf("[+] Sent an election message to backup %i.\n", rmlist[i].id);
+         	else
+				rmlist[i].socket = -1;
+      	}
+   	}
+
+   	sleep(TIMEOUT);
+
+	// Se ninguem respondeu a mensagem de election, quem mandou a mensagem vira o novo primario
+	if(!n_of_answers)
+	{
+		//printf("I am the new primary.\n");
+		become_primary();
+	}
+	else
+	{
+		sleep(TIMEOUT);
+		if(coordinator_message) // Quando chegar a mensagem do coordinator é pq ele tem um id maior e vira o novo primario
+		{
+			primary_update(coordinator_message);
+		}
+		else 
+		{
+			//printf("I am the new primary.\n");
+			become_primary();
+		}
+	}    
+
+	ongoing_election = 0;
+	election_message = 0;
+	coordinator_message = 0;
 }
 
 int main(int argc, char *argv[])

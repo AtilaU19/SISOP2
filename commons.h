@@ -16,5 +16,8 @@
 #define RM_LIMIT 20
 #define HEARTBEAT 8
 #define BACKUP 9
+#define BULLY_ELECTION_MSG 10
+#define BULLY_COORDINATOR_MSG 11
 #define HEARTBEAT_DURATION 1
+#define TIMEOUT 1
 #endif
