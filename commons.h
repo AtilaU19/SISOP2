@@ -14,12 +14,12 @@
 #define NOTIFLIMIT 500
 #define FOLLOWLIMIT 500
 #define RM_LIMIT 20
-/////
-#define INIT_BACKUP 8
-/////
-#define BULLY_ELECTION 8
-#define BULLY_ANSWER 9
-#define BULLY_COORDINATOR 10
-#define MAX_TYPE 10
-////
+#define HEARTBEAT 8
+#define BACKUP 9
+#define BULLY_ELECTION_MSG 10
+#define BULLY_COORDINATOR_MSG 11
+#define BULLY_ANSWER 12
+#define MAX_TYPE 12
+#define HEARTBEAT_DURATION 1
+#define TIMEOUT 1
 #endif

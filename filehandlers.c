@@ -99,6 +99,16 @@ void read_server_settings(char *file_name, int rm_identifier, rm *caller, rm *li
 	ssize_t read;
 	size_t length;
 
+	///// Conta o numero de linhas do arquivo
+	int n = 15, n_lines = 0;
+	char *line;
+	while(fgets(line, n, settings) != NULL)
+	{
+			n_lines++;
+	}
+	rewind(settings); //vollta para o comeco do arquivo
+	
+
 	while ((read = getline(&buffer, &length, settings)) != -1)
 	{
 		counter = 0;
@@ -172,7 +182,7 @@ void read_server_settings(char *file_name, int rm_identifier, rm *caller, rm *li
 		// atribui à lista de rms tamanho igual ao número de rms lidos no arquivo
 
 		// Da exit se nao achou a RM depois de percorrer todo o settings file
-		if (!foundRM && (atoi(thisline_id) == 9))   ///////// ACHAR SOLUCAO MELHOR (3 é o numero do ultimo id, mas isso pode variar)
+		if (!foundRM && (atoi(thisline_id) == n_lines-1))
 		{
 			printf("RM not present in settings file.\n");
 			exit(1);

@@ -33,15 +33,21 @@ typedef struct multicast_parameters
 	int seqncnt;
 	int length;
 	int time;
-	char* payload;
-}multicast_parameters;
+	char *payload;
+} multicast_parameters;
 
-int n, seqncount, i = 1;
+int n, seqncount = 0, i = 1;
 struct sockaddr_in serv_addr;
+int ongoing_election = 0;
+int threadIsOpen[RM_LIMIT] = 0;
 packet msg;
 
 thread_parameters threadparams[CLIENTLIMIT];
 pthread_t client_pthread[2 * CLIENTLIMIT];
+pthread_t heartbeat_pthread;
+pthread_t connect_to_other_backups_pthread;
+pthread_t receive_bully_pthread[RM_LIMIT];
+struct hostent *server;
 
 pthread_mutex_t send_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t follow_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -52,15 +58,18 @@ pthread_barrier_t barriers[CLIENTLIMIT];
 // lista de profiles//
 profile list_of_profiles[CLIENTLIMIT];
 
-//RMs
+// RMs
 int size_of_rmlist;
 
 rm thisRM;
 rm primaryRM;
 rm rmlist[RM_LIMIT];
 
-
-
+//VARIABLES FOR BULLY
+int open_thread[RM_LIMIT];
+int coordinator_message = 0;
+int n_of_answers = 0;
+int election_message = 0;
 
 // ctrl c handle
 void signalHandler(int signal)
@@ -258,8 +267,8 @@ void *notificationhandler(void *arg)
 				// sends notification
 
 				inet_ntop(AF_INET, &par->cli_addr.sin_addr, buffer, sizeof(buffer));
-				//printf("[+] DEBUG server > sockfd = %i, send address = %s\n", sockfd, buffer);
-				// TA PEGANDO O ENDEREÇO ERRADO QUANDO N TA FEITO O FOLLOW
+				// printf("[+] DEBUG server > sockfd = %i, send address = %s\n", sockfd, buffer);
+				//  TA PEGANDO O ENDEREÇO ERRADO QUANDO N TA FEITO O FOLLOW
 
 				sendpacket(sockfd, NOTIFICATION, ++seqncount, strlen(payload) + 1, getcurrenttime(), payload, par->cli_addr);
 				// if(payload){
@@ -375,20 +384,183 @@ void login_handler(int userid, int sockfd, struct sockaddr_in cli_addr)
 	// exit(1);
 }
 
-void *backup_handler(void* arg){
+void connect_to_primary()
+{
 
+	//TA DANDO SEGFAULT
+	struct sockaddr_in server_addr, client_addr;
+	packet msg;
+	if (primaryRM.socket = socket(AF_INET, SOCK_DGRAM, 0) == -1)
+	{
+		printf("failed to open socket\n");
+	}
+	server = gethostbyname("localhost");
+	server_addr.sin_addr = *((struct in_addr *)server->h_addr);
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(primaryRM.port);
+	bzero(&(server_addr.sin_zero), 8);
+	sendpacket(primaryRM.socket, BACKUP, seqncount++, strlen(thisRM.id_string) + 1, getcurrenttime(), thisRM.id_string, server_addr);
+	printf("\nTESTE 1\n");
+	recvpacket(primaryRM.socket, &msg, client_addr);
+	printf("\nTESTE 2\n");
+	if (msg.type != ACK)
+	{
+		primaryRM.socket = -1;
+	}
 }
 
-//função para espelhar uma request do primary para os backups
-void multicast_primary_to_backups (multicast_parameters par){
+// função para espelhar uma request do primary para os backups
+void multicast_primary_to_backups(multicast_parameters par)
+{
 	pthread_mutex_lock(&multicast_mutex);
-	//faz um foreach com os servers na lista
-	for(int rm = 0; rm < size_of_rmlist; rm++){
-		//se o socket do rm for válido
-		if(rmlist[rm].socket != -1){
-			
+	// faz um foreach com os servers na lista
+	for (int rm = 0; rm < size_of_rmlist; rm++)
+	{
+		// se o socket do rm for válido
+		if (rmlist[rm].socket != -1)
+		{
 		}
 	}
+}
+
+void *heartbeat_signal(void *arg)
+{
+	packet msg;
+	multicast_parameters par;
+	par.userid = -1;
+	par.length = strlen("heartbeat");
+	par.payload = "heartbeat";
+	par.seqncnt = seqncount++;
+	par.time = getcurrenttime();
+	par.type = HEARTBEAT;
+	while (TRUE)
+	{
+		sleep(HEARTBEAT_DURATION);
+		if (!ongoing_election)
+		{
+			multicast_primary_to_backups(par);
+			printf("Sending heartbeat to backups\n");
+		}
+	}
+}
+
+void recv_bully_msg(void *arg){
+	return(0);
+}
+
+void connect_to_other_backups(void *arg){
+	return(0);
+}
+
+
+void close_backup_threads()
+{
+	int i;
+	thisRM.is_primary = 1;
+	pthread_cancel(connect_to_other_backups_pthread);
+	
+	for(i = 0; i < RM_LIMIT; i++)
+	{
+		if(open_thread[i] && open_thread[i] != -1)
+		{
+			pthread_cancel(receive_bully_pthread[i]);
+			open_thread[i] = -1;
+		}  
+	}
+}
+
+int get_rm_id(int id)
+{
+	int i;
+
+   	for(i = 0; i < RM_LIMIT; i++)
+	{
+      	if(rmlist[i].id == id)
+        	return i;
+   	}
+
+   	return -1;
+}
+
+void primary_update(int coordinator_id)
+{
+	int id = get_rm_id(coordinator_id);
+
+	primaryRM.id  = rmlist[id].id;
+	primaryRM.socket = rmlist[id].socket;
+	strcpy(primaryRM.id_string, rmlist[id].id_string);
+	primaryRM.port = rmlist[id].port;
+	rmlist[id].socket = -1;
+
+	printf("[+] The new primary is RM %i\n", coordinator_id);
+}
+
+void become_primary()
+{
+   	int i = 0;
+   	for(i = 0; i < size_of_rmlist; i++)
+   	{
+	   	// Envia uma mensagem de election para quem nao tem o socket = -1
+      	if(rmlist[i].socket != -1 && rmlist[i].id != thisRM.id)
+		{
+			// FAZER FUNCAO
+			if(send_packet_with_userid(rmlist[i].socket,thisRM.id, BULLY_COORDINATOR_MSG, ++seqncount, strlen("coord")+1, getTime(), "coord"))	
+				
+				printf("Sent a coordinator message to RM %i\n", rmlist[i].id);
+			else
+				rmlist[i].socket = -1;
+		}               
+	}
+	close_backup_threads();
+}
+
+void bully_election()
+{
+	printf("[+]  BULLY ELECTION STARTED  [+]\n");
+	int i = 0;
+	ongoing_election = 1;
+	n_of_answers = 0;
+	coordinator_message = 0;
+
+	for(i = 0; i < size_of_rmlist; i++)
+   	{
+		// Envia uma mensagem de election para todas RM com id maior que o seu
+    	if(rmlist[i].id > thisRM.id)
+      	{
+			// FAZER FUNCAO
+         	if(send_packet_with_userid(rmlist[i].socket, thisRM.id, BULLY_ELECTION_MSG, ++seqncount, strlen("election")+1, getTime(), "election"))
+
+				printf("[+] Sent an election message to backup %i.\n", rmlist[i].id);
+         	else
+				rmlist[i].socket = -1;
+      	}
+   	}
+
+   	sleep(TIMEOUT);
+
+	// Se ninguem respondeu a mensagem de election, quem mandou a mensagem vira o novo primario
+	if(!n_of_answers)
+	{
+		//printf("I am the new primary.\n");
+		become_primary();
+	}
+	else
+	{
+		sleep(TIMEOUT);
+		if(coordinator_message) // Quando chegar a mensagem do coordinator é pq ele tem um id maior e vira o novo primario
+		{
+			primary_update(coordinator_message);
+		}
+		else 
+		{
+			//printf("I am the new primary.\n");
+			become_primary();
+		}
+	}    
+
+	ongoing_election = 0;
+	election_message = 0;
+	coordinator_message = 0;
 }
 
 int main(int argc, char *argv[])
@@ -400,14 +572,13 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-	//Lê do arquivo de settings as configurações de RM, associa às structs desse processo
-	//Assim ele sabe quem ele é/quem é o primary/quem são os outros
-	//E por onde se comunicar com os outros
+	// Lê do arquivo de settings as configurações de RM, associa às structs desse processo
+	// Assim ele sabe quem ele é/quem é o primary/quem são os outros
+	// E por onde se comunicar com os outros
 
 	read_server_settings(argv[1], atoi(argv[2]), &thisRM, rmlist, &size_of_rmlist, &primaryRM);
 
 	printf("[+]   Server found in settings   [+]\nId: %i\nPort: %i\nPrimary?:%i\n", thisRM.id, thisRM.port, thisRM.is_primary);
-
 
 	int one = 1;
 	int userid;
@@ -416,7 +587,7 @@ int main(int argc, char *argv[])
 
 	// incialização das structs
 	init_profiles(list_of_profiles);
-	//READ PROFILES VAI MUDAR (receber o RM)
+	// READ PROFILES VAI MUDAR (receber o RM)
 	read_profiles(list_of_profiles, thisRM.id);
 	init_barriers();
 
@@ -428,7 +599,7 @@ int main(int argc, char *argv[])
 	bzero((char *)&serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	serv_addr.sin_port = htons(LOGINPORT);
+	serv_addr.sin_port = htons(thisRM.port);
 
 	if ((setsockopt(thisRM.socket, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1))
 	{
@@ -440,16 +611,29 @@ int main(int argc, char *argv[])
 		printf("ERROR on binding");
 
 	clilen = sizeof(struct sockaddr_in);
-	
-	
-	
-	//SERVIDOR PRIMÁRIO ROTINA
-	
-	
-	
-	if (thisRM.is_primary){
+
+	// SERVIDOR PRIMÁRIO ROTINA
+
+	if (thisRM.is_primary)
+	{
 		printf("[+]      PRIMARY SERVER INITIALIZED       [+]\n");
-			
+
+		if (pthread_create(&heartbeat_pthread, NULL, heartbeat_signal, NULL) != 0)
+		{
+			printf("Heartbeat failed to initialize\n");
+		}
+
+		server = gethostbyname("localhost");
+		serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
+		serv_addr.sin_port = htons(primaryRM.port);
+		serv_addr.sin_family = AF_INET;
+		bzero(&(serv_addr.sin_zero), 8);
+
+		/*
+				for (int userid = 0; userid<CLIENTLIMIT; userid++){
+					if (list_of_profiles[userid].)
+				}
+		*/
 		while (1)
 		{
 			signal(SIGINT, signalHandler);
@@ -473,17 +657,46 @@ int main(int argc, char *argv[])
 		close(thisRM.socket);
 		return 0;
 	}
-	
-	
-	
-	//SERVIDOR BACKUP ROTINA
-	
-	
-	
-	else{
+
+	// SERVIDOR BACKUP ROTINA
+
+	else
+	{
 		printf("[+]         BACKUP SERVER INITIALIZED         [+]\n");
+
+		int followed, follower, RMcounter;
+
+		connect_to_primary();
+
+		if (pthread_create(&connect_to_other_backups_pthread, NULL, connect_to_other_backups, NULL) != 0){
+			printf("Error creating thread to connect to other backup servers\n");
+		}
+
+		for(RMcounter = 0; RMcounter<RM_LIMIT; RMcounter++){
+			threadIsOpen[RMcounter] = 0;
+		}
+
+		while(!thisRM.is_primary){
+			//abre a thread para todos os RMS que não estão abertos ainda
+			//possuem socket válido e são backups
+			for(RMcounter = 0; RMcounter<size_of_rmlist; RMcounter++){
+				if(!threadIsOpen[rmlist[RMcounter].id] 
+				&& rmlist[RMcounter].socket != -1 
+				&& !rmlist[RMcounter].is_primary){
+					threadIsOpen[rmlist[RMcounter].id] = 1;
+					if(pthread_create(
+						&receive_bully_pthread[rmlist[RMcounter].id],
+						NULL, recv_bully_msg,
+						(void*)((long int)&rmlist[RMcounter].id)) != 0){
+							printf("error creating bully message receiving thread\n");
+					}
+				}
+			}
+
+			
+		}
 
 	}
 
-	//checkaddress(serv_addr);
+	// checkaddress(serv_addr);
 }
