@@ -59,33 +59,27 @@ int sendpacket(int sockfd, int action, int seqn, int len, int timestamp, char *p
     return 0;
 }
 
-void sendpacket(int sockfd, int userid, int action, int seqn, int len, int timestamp, char *payload, struct sockaddr_in addr)
-{
-    packet msg;
-    msg.type = action;
-    msg.seqn = seqn;
-    msg.length = len;
-    msg.timestamp = timestamp;
-    msg.userid = userid;
-    // printf("[+] DEBUG packet > Sending payload %s\n", payload);
-    sendto(sockfd, &msg, 8, 0, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
-    sendto(sockfd, payload, strlen(payload), 0, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
-    // printf("%lu",sizeof(msg));
-    //checkaddress(addr);
-    //printf("[+] DEBUG packet > Sent message: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);
-}
-
-void sendpacketwithid(int sockfd, int userid, int action, int seqn, int len, int timestamp, char *payload, struct sockaddr_in addr)     //a principio seria igual a de cima mas com o userid a mais
-{        
-    packet msg;
-    msg.type = action;
-    msg.seqn = seqn;
-    msg.length = len;
-    msg.timestamp = timestamp;
-    msg.userid = userid;
-    sendto(sockfd, &msg, 8, 0, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
-    sendto(sockfd, payload, strlen(payload), 0, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
-    
+int sendpacketwithuserid(int sockfd, int userid, int action, int seqn, int len, int timestamp, char *payload, struct sockaddr_in addr)
+{   
+    int err = 0;
+    socklen_t size = sizeof(int);
+    int is_connected = getsockopt (sockfd, SOL_SOCKET, SO_ERROR, &err, &size);
+    if (is_connected == 0 && action >=0 && action <= MAX_TYPE){
+        packet msg;
+        msg.type = action;
+        msg.seqn = seqn;
+        msg.length = len;
+        msg.timestamp = timestamp;
+        msg.userid = userid;
+        // printf("[+] DEBUG packet > Sending payload %s\n", payload);
+        sendto(sockfd, &msg, 8, 0, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
+        sendto(sockfd, payload, strlen(payload), 0, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
+        // printf("%lu",sizeof(msg));
+        //checkaddress(addr);
+        //printf("[+] DEBUG packet > Sent message: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, payload);
+        return 1;
+    }
+    return 0;
 }
 
 // só recebe o packet, chamado pelo recvprintpacket
