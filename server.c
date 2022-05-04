@@ -444,16 +444,16 @@ void *heartbeat_signal(void *arg)
 	}
 }
 
-/*
-void recv_bully_msg(void *arg){
+
+void* recv_bully_msg(void *arg){
 	//return(0);
 }
 
 
-void connect_to_other_backups(void *arg){
+void* connect_to_other_backups(void *arg){
 	//return(0);
 }
-*/
+
 
 void close_backup_threads()
 {
@@ -506,7 +506,7 @@ void become_primary()
       	if(rmlist[i].socket != -1 && rmlist[i].id != thisRM.id)
 		{
 			// FAZER FUNCAO
-			if(sendpacketwithuserid(rmlist[i].socket,thisRM.id, BULLY_COORDINATOR_MSG, ++seqncount, strlen("coord")+1, getcurrenttime(), "coord"))	
+			if(sendpacketwithuserid(rmlist[i].socket,thisRM.id, BULLY_COORDINATOR_MSG, ++seqncount, strlen("coord")+1, getcurrenttime(), "coord", serv_addr))	
 				
 				printf("Sent a coordinator message to RM %i\n", rmlist[i].id);
 			else
@@ -530,7 +530,7 @@ void bully_election()
     	if(rmlist[i].id > thisRM.id)
       	{
 			// FAZER FUNCAO
-         	if(sendpacketwithuserid(rmlist[i].socket, thisRM.id, BULLY_ELECTION_MSG, ++seqncount, strlen("election")+1, getcurrenttime(), "election"))
+         	if(sendpacketwithuserid(rmlist[i].socket, thisRM.id, BULLY_ELECTION_MSG, ++seqncount, strlen("election")+1, getcurrenttime(), "election", serv_addr))
 
 				printf("[+] Sent an election message to backup %i.\n", rmlist[i].id);
          	else
