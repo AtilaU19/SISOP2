@@ -387,19 +387,22 @@ void login_handler(int userid, int sockfd, struct sockaddr_in cli_addr)
 void connect_to_primary()
 {
 
-	//TA DANDO SEGFAULT
 	struct sockaddr_in server_addr, client_addr;
 	packet msg;
-	if (primaryRM.socket = socket(AF_INET, SOCK_DGRAM, 0) == -1)
+	if ((primaryRM.socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 	{
 		printf("failed to open socket\n");
 	}
+	//printf("socket do primary = %i\n", primaryRM.socket);
 	server = gethostbyname("localhost");
-	server_addr.sin_addr = *((struct in_addr *)server->h_addr);
+	bzero((char *)&server_addr, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
+	server_addr.sin_addr = *((struct in_addr *)server->h_addr);
 	server_addr.sin_port = htons(primaryRM.port);
-	bzero(&(server_addr.sin_zero), 8);
-	sendpacket(primaryRM.socket, BACKUP, seqncount++, strlen(thisRM.id_string) + 1, getcurrenttime(), thisRM.id_string, server_addr);
+	if (!sendpacket(primaryRM.socket, BACKUP, seqncount++, strlen(thisRM.id_string) + 1, getcurrenttime(), thisRM.id_string, server_addr)){
+		primaryRM.socket = -1;
+		printf("BACKUP failed to send message to primary RM\n");
+	}
 	printf("\nTESTE 1\n");
 	recvpacket(primaryRM.socket, &msg, client_addr);
 	printf("\nTESTE 2\n");
@@ -407,6 +410,27 @@ void connect_to_primary()
 	{
 		primaryRM.socket = -1;
 	}
+}
+
+void primary_acknowledge(int rmid){
+	packet msg;
+	//POSSIVELMENTE DA ERRO PQ EU TO SÓ PASSANDO ESSES ENDEREÇOS SEM PRESTAR MUITA ATENÇÃO SE É PRA SER O ENDEREÇO DO SERVER OU DO CLIENT
+   if(!recvpacket(rmlist[rmid].socket, &msg, rmlist[rmid].addr).success)
+   {  
+      rmlist[rmid].socket = -1;
+   }
+   else
+
+   {  
+      if(msg.type != ACK){
+         exit(1);
+      }
+       if(msg._payload){
+         free(msg._payload);
+       } 
+
+   }   
+
 }
 
 // função para espelhar uma request do primary para os backups
@@ -419,12 +443,23 @@ void multicast_primary_to_backups(multicast_parameters par)
 		// se o socket do rm for válido
 		if (rmlist[rm].socket != -1)
 		{
+			//TALVEZ HAJA ERRO POR PASSAR UM CLIENT ADDRESS GENÉRICO
+			if(sendpacketwithuserid(rmlist[i].socket, par.userid, par.type, par.seqncnt, par.length, par.time, par.payload, rmlist[rm].addr)){
+				primary_acknowledge(i);
+			}
+			else{
+				rmlist[i].socket = -1;
+			}
 		}
 	}
+	pthread_mutex_unlock(&multicast_mutex);
 }
 
 void *heartbeat_signal(void *arg)
 {
+
+	//PROVAVEL QUE DE ERRO PQ O ENDEREÇO DOS BACKUPS É ADICIONADO SÓ QUANDO O BACKUP TENTA ENTRAR EM CONTATO
+	//O QUE OCORRE DEPOIS DA ABERTURA DESSA THREAD
 	packet msg;
 	multicast_parameters par;
 	par.userid = -1;
@@ -484,6 +519,17 @@ int get_rm_id(int id)
    	return -1;
 }
 
+int get_rm_list_index(int id){
+
+   for(int i = 0; i < RM_LIMIT; i++){
+      if(rmlist[i].id == id){
+         return i;
+      }
+   }
+
+   return -1;
+}
+
 void primary_update(int coordinator_id)
 {
 	int id = get_rm_id(coordinator_id);
@@ -514,6 +560,19 @@ void become_primary()
 		}               
 	}
 	close_backup_threads();
+}
+
+void send_users_and_followers(int rmid, struct sockaddr_in cli_addr){
+	char buffer[200];
+	for (int i = 0; i < CLIENTLIMIT; i++){
+		//para cada cliente, testa se o USERNAME é válido e então
+		if(list_of_profiles[i].user_name != "" && list_of_profiles[i].user_name[0] == '@' && rmlist[rmid].socket != -1){
+			strcpy(buffer, list_of_profiles[i].user_name);
+			if(sendpacketwithuserid(rmlist[rmid].socket, i, ADDUSER, ++seqncount, strlen(buffer)+1, getcurrenttime(), buffer, cli_addr)){
+				primary_acknowledge(rmid);
+			}
+		}
+	}
 }
 
 void bully_election()
@@ -580,10 +639,11 @@ int main(int argc, char *argv[])
 
 	read_server_settings(argv[1], atoi(argv[2]), &thisRM, rmlist, &size_of_rmlist, &primaryRM);
 
+	printf("[+]   Primary characteristics:   [+]\nId: %i\nPort: %i\nSocket:%i\n", primaryRM.id, primaryRM.port, primaryRM.socket);
 	printf("[+]   Server found in settings   [+]\nId: %i\nPort: %i\nPrimary?:%i\n", thisRM.id, thisRM.port, thisRM.is_primary);
 
 	int one = 1;
-	int userid;
+	int userid, rmlistindex = 0;
 	socklen_t clilen;
 	struct sockaddr_in cli_addr;
 
@@ -631,17 +691,13 @@ int main(int argc, char *argv[])
 		serv_addr.sin_family = AF_INET;
 		bzero(&(serv_addr.sin_zero), 8);
 
-		/*
-				for (int userid = 0; userid<CLIENTLIMIT; userid++){
-					if (list_of_profiles[userid].)
-				}
-		*/
 		while (1)
 		{
 			signal(SIGINT, signalHandler);
-			/* receive from socket */
+			///receive from socket 
 			cli_addr = recvpacket(thisRM.socket, &msg, cli_addr).addr;
 
+			//recebeu uma tentativa do usuário de entrar em contato
 			if (msg.type == LOGUSER)
 			{
 				userid = profile_handler(list_of_profiles, msg._payload, thisRM.socket, ++seqncount);
@@ -652,8 +708,44 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
-				printf("[+] Received this instead of login packet: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
-				printf("User not logged in.\n");
+				//recebeu uma tentativa do backup de entrar em contato
+				if (msg.type == BACKUP){
+					multicast_parameters par;
+					par.length = strlen(rmlist[rmlistindex].id_string) + 1;
+					par.payload = rmlist[rmlistindex].id_string;
+					par.seqncnt = ++seqncount;
+					par.time = getcurrenttime();
+					par.type = BACKUP;
+					par.userid = -1;
+					printf("RECEIVED BACKUP ATTEMPT\n");
+					rmlistindex = get_rm_list_index(atoi(msg._payload)); 
+
+					if(msg._payload){
+						free(msg._payload); 
+					}
+					
+					//VOU FAZER UMA COISA POSSIVELMENTE ERRADA
+					//E PASSAR O SOCKET DO THISRM AO INVÉS DE FAZER UM NOVO SOCKET
+					//POSSIVEL RAIZ DE ERROS FUTUROS
+					
+					rmlist[rmlistindex].socket = thisRM.socket;
+					rmlist[rmlistindex].addr = cli_addr;
+					//warn all the other backups this one connected
+					
+					
+
+					multicast_primary_to_backups(par);
+					
+					
+					//send all initial info to this backup
+					send_users_and_followers(rmlistindex, cli_addr);
+
+				}
+				else{
+					printf("[+] Received this instead of login packet: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
+					printf("User not logged in.\n");
+				}
+				
 			}
 		}
 		close(thisRM.socket);
@@ -699,6 +791,9 @@ int main(int argc, char *argv[])
 		}
 
 	}
+
+	
+	
 
 	// checkaddress(serv_addr);
 }

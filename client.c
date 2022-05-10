@@ -176,6 +176,7 @@ int main(int argc, char *argv[])
 		printf("ERROR opening socket");
 
 
+	//printf("socket do client = %i\n", sockfd);
 	//FRONTEND
 	struct frontend_params params;
 	strcpy(params.handle, handle);
