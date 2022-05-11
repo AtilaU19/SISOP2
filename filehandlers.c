@@ -1,6 +1,5 @@
 #include "profile_notif.c"
 #include "commons.h"
-#include "rm.c"
 
 void save_profiles(profile list_of_profiles[CLIENTLIMIT])
 {

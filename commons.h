@@ -20,7 +20,7 @@
 #define BULLY_COORDINATOR_MSG 11
 #define BULLY_ANSWER 12
 #define ADDUSER 13
-#define MAX_TYPE 15
+#define MAX_TYPE 13
 #define HEARTBEAT_DURATION 1
 #define TIMEOUT 1
 #endif

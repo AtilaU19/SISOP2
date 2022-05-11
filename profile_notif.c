@@ -6,7 +6,7 @@
 #include <string.h>
 #include <netdb.h>
 #include "commons.h"
-
+#include "rm.c"
 typedef struct notification
 {
 	uint32_t id;		// Identificador da notificação (sugere-se um identificador único)
@@ -129,8 +129,8 @@ int profile_handler(profile *list_of_profiles, char *username, int sockfd, int s
 	return userid;
 }
 
-void init_profiles(profile *list_of_profiles)
-{ // inicializa todas profiles da lista com nome vazio e 0 em online
+void init_profiles(profile *list_of_profiles){
+	// inicializa todas profiles da lista com nome vazio e 0 em online
 	for (int i = 0; i < CLIENTLIMIT; i++)
 	{
 		list_of_profiles[i].user_name = "";
@@ -138,4 +138,9 @@ void init_profiles(profile *list_of_profiles)
 	}
 }
 
+void init_rmlist(rm *rmlist){
+	for (int i = 0; i < RM_LIMIT; i++){
+		//malloc(rmlist[i].addr, sizeof(struct *sockaddr_in));
+	}
+}
 #endif

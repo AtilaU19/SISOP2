@@ -386,7 +386,10 @@ void login_handler(int userid, int sockfd, struct sockaddr_in cli_addr)
 
 void connect_to_primary()
 {
-
+	//IMPORTANTE
+	//BACKUP DE CONFIG 1 NÃO CONSEGUE RECEBER O ACK DO PRIMARY
+	//OUTRAS CONFIGS CONSEGUEM
+	//PORÉM QUEBRA SE MAIS DE UM TENTA SE CONECTAR
 	struct sockaddr_in server_addr, client_addr;
 	packet msg;
 	if ((primaryRM.socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
@@ -481,12 +484,10 @@ void *heartbeat_signal(void *arg)
 
 
 void* recv_bully_msg(void *arg){
-	//return(0);
 }
 
 
 void* connect_to_other_backups(void *arg){
-	//return(0);
 }
 
 
@@ -624,6 +625,10 @@ void bully_election()
 	coordinator_message = 0;
 }
 
+void add_user_to_backup(packet msg, int userid){
+
+}
+
 int main(int argc, char *argv[])
 {
 
@@ -637,11 +642,12 @@ int main(int argc, char *argv[])
 	// Assim ele sabe quem ele é/quem é o primary/quem são os outros
 	// E por onde se comunicar com os outros
 
+	
+	sleep(1);
 	read_server_settings(argv[1], atoi(argv[2]), &thisRM, rmlist, &size_of_rmlist, &primaryRM);
 
 	printf("[+]   Primary characteristics:   [+]\nId: %i\nPort: %i\nSocket:%i\n", primaryRM.id, primaryRM.port, primaryRM.socket);
 	printf("[+]   Server found in settings   [+]\nId: %i\nPort: %i\nPrimary?:%i\n", thisRM.id, thisRM.port, thisRM.is_primary);
-
 	int one = 1;
 	int userid, rmlistindex = 0;
 	socklen_t clilen;
@@ -745,7 +751,7 @@ int main(int argc, char *argv[])
 					printf("[+] Received this instead of login packet: %i, %i, %i, %i, %s\n", msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload);
 					printf("User not logged in.\n");
 				}
-				
+			
 			}
 		}
 		close(thisRM.socket);
@@ -773,6 +779,8 @@ int main(int argc, char *argv[])
 		while(!thisRM.is_primary){
 			//abre a thread para todos os RMS que não estão abertos ainda
 			//possuem socket válido e são backups
+			printf("Amount of backups that are valid: %i \n", size_of_rmlist);
+			//ta abrindo infinitamente threads, alguma das condições que deveria mudar n mudou
 			for(RMcounter = 0; RMcounter<size_of_rmlist; RMcounter++){
 				if(!threadIsOpen[rmlist[RMcounter].id] 
 				&& rmlist[RMcounter].socket != -1 
@@ -784,6 +792,30 @@ int main(int argc, char *argv[])
 						(void*)((long int)&rmlist[RMcounter].id)) != 0){
 							printf("error creating bully message receiving thread\n");
 					}
+				}
+				printf("Creating bully threads for other backups\n");
+			}
+			sleep(3);
+			if(!recvpacket(primaryRM.socket, &msg, primaryRM.addr).success)
+            {
+				printf("Missed Heartbeat from server\nMessage was: %i, %i, %i, %i, %s\nuserid was %i\n", msg.type, msg.seqn, msg.length, msg.timestamp, msg._payload, msg.userid);
+               if(!ongoing_election && !election_message)
+               {
+                  bully_election();
+               }
+			}
+			else{
+				switch(msg.type){
+					//BACKUP tentando se conectar com esse
+					case BACKUP:
+						if(atoi(msg._payload) != thisRM.id){
+                        	connect_to_other_backups(atoi(msg._payload));   
+							printf("RECEIVED BACKUP CONNECTION ATTEMPT\n"); 
+                     	}
+					case ADDUSER:
+						add_user_to_backup(msg, msg.userid);
+						printf("Added user %s to backup\n", msg._payload);
+					
 				}
 			}
 
